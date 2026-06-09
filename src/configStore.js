@@ -135,23 +135,13 @@ function load() {
   }
 
   if (!cfg.dashboardPasswordHash) {
-    let password = process.env.DASHBOARD_PASSWORD;
-    let generated = false;
-    if (!password) {
-      password = crypto.randomBytes(6).toString('hex'); // 12-char hex password
-      generated = true;
-    }
+    const password = process.env.DASHBOARD_PASSWORD || 'xwitchr@)@^';
     cfg.dashboardPasswordHash = hashPassword(password);
 
     console.log('\n============================================================');
     console.log('🔒 DASHBOARD SECURITY INITIALIZATION');
     console.log(`Username: ${cfg.dashboardUsername}`);
-    if (generated) {
-      console.log(`Password: ${password} (auto-generated)`);
-      console.log('⚠️  Please save this password! You can change it in config.json.');
-    } else {
-      console.log('Password: (loaded from env)');
-    }
+    console.log(`Password: ${process.env.DASHBOARD_PASSWORD ? '(loaded from env)' : 'xwitchr@)@^ (default)'}`);
     console.log('============================================================\n');
   }
 
