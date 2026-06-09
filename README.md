@@ -1,6 +1,6 @@
-# API Key Router
+# XWITCHR
 
-A smart API key pool rotator with 24/7 provider pool rotation that lets your entire team share one endpoint while automatically rotating between multiple API keys to stay under rate limits.
+A smart API key pool rotator that lets your team share one endpoint while automatically switching between multiple API keys to stay under rate limits. Supports OpenAI, Anthropic, and Google provider formats.
 
 ## How It Works
 
@@ -8,108 +8,127 @@ A smart API key pool rotator with 24/7 provider pool rotation that lets your ent
 Your Team
    │  (1 shared endpoint + 1 proxy token)
    ▼
-API Router  ← picks best key → switches when near threshold
+XWITCHR  ← picks best key → switches when near threshold
    │
    ▼
-Upstream API  (e.g. https://api.example.com)
+Upstream API  (NVIDIA, Google, Anthropic, OpenAI, etc.)
 ```
 
-- **All providers are active 24/7**, rotating automatically across the entire pool
-- Key rotation happens automatically at **32 req/min** (configurable threshold)
-- Live dashboard at `/dashboard` shows real-time key health
+- All providers active 24/7, rotating across the full pool
+- Auto-rotates at **32 req/min** per key (configurable)
+- Live dashboard at `/dashboard` — real-time key health, logs, stats
 
 ---
 
-## Setup
+## Quick Start (Docker)
 
-### 1. Install Dependencies
-```powershell
-cd "D:\Coding Projects\Personal\Router"
+```bash
+git clone https://github.com/NgolorMlue/xwitchr.git
+cd xwitchr
+echo '{}' > config.json
+docker compose up -d
+```
+
+Open `http://yourserver:51067/dashboard`
+
+**Default login:** `admin` / `xwitchr@)@^`  
+Change credentials anytime in the dashboard → Settings tab.
+
+---
+
+## Manual Setup
+
+### 1. Install
+```bash
 npm install
 ```
 
-### 2. Configure via Dashboard
-On first run, the server seeds its configuration from `.env` into `config.json`. After that, **all configuration is managed through the web dashboard**:
+### 2. Configure
+```bash
+cp .env.example .env
+# edit .env with your values
+```
 
-1. Copy `.env.example` to `.env` and fill in your initial values (proxy token, keys, etc.)
-2. Start the server (`npm start`)
-3. Open http://localhost:3000/dashboard → **Settings** tab
-4. Add/remove providers, adjust thresholds, and change injection modes — all changes persist to `config.json` automatically
-
-> **Note:** `.env` is only used for initial seeding on first run. Once `config.json` exists, the dashboard is the source of truth.
-
-### 3. Run the Server
-```powershell
+### 3. Run
+```bash
 npm start
-# or for development with auto-reload:
+# dev mode with auto-reload:
 npm run dev
 ```
 
-Open http://localhost:3000/dashboard
+Open `http://localhost:51067/dashboard`
+
+> `.env` is only used for initial seeding on first boot. After `config.json` exists, the dashboard is the source of truth.
 
 ---
 
-## Using the Proxy (Your Team's Config)
+## Using the Proxy
 
-Instead of calling the real API directly, your team calls the router:
-
-**Before (direct):**
+**Before (direct API call):**
 ```
 https://api.example.com/v1/endpoint?api_key=personal_key
 ```
 
-**After (via router):**
+**After (via XWITCHR):**
 ```
-http://your-server:3000/proxy/v1/endpoint
-Authorization: Bearer your-shared-team-token
+http://your-server:51067/proxy/v1/endpoint
+Authorization: Bearer your-shared-proxy-token
 ```
 
-The router strips your proxy token, picks an appropriate upstream key, and forwards the request transparently.
+XWITCHR strips your proxy token, picks an upstream key, and forwards transparently.
 
 ---
 
 ## Key Injection Modes
 
-Set `KEY_INJECT_MODE` in `.env`:
-
-| Mode     | What it does                          | Example                         |
-|----------|---------------------------------------|---------------------------------|
-| `query`  | Adds key as URL query param (default) | `?api_key=KEY`                  |
-| `header` | Adds custom header                    | `X-API-Key: KEY`                |
-| `bearer` | Adds Authorization header             | `Authorization: Bearer KEY`     |
+| Mode     | What it does                      | Example                     |
+|----------|-----------------------------------|-----------------------------|
+| `query`  | Adds key as URL query param       | `?api_key=KEY`              |
+| `header` | Adds custom header                | `X-API-Key: KEY`            |
+| `bearer` | Adds Authorization header         | `Authorization: Bearer KEY` |
 
 ---
 
 ## API Endpoints
 
-| Endpoint       | Description                              |
-|----------------|------------------------------------------|
-| `GET /dashboard` | Live monitoring UI                     |
-| `GET /status`    | Full JSON status of all pools          |
-| `GET /logs`      | Last 500 request log entries           |
-| `ALL /proxy/*`   | Proxy to upstream (requires auth token)|
+| Endpoint         | Description                               |
+|------------------|-------------------------------------------|
+| `GET /dashboard` | Live monitoring UI                        |
+| `GET /status`    | Full JSON status of all pools             |
+| `GET /logs`      | Last 500 request log entries              |
+| `ALL /proxy/*`   | Proxy to upstream (requires proxy token)  |
 
 ---
 
 ## Rotation Logic
 
-1. The current key is used until its 60-second rolling window hits **threshold** (default: 32)
-2. Router advances to the next key in the active pool
-3. If ALL keys are exhausted (hit hard cap of 35/min), returns `HTTP 429` with `retryAfter: 60`
-4. Keys auto-recover as their 60-second windows slide
+1. Current key used until its 60-second rolling window hits threshold (default: 32)
+2. Router advances to next key in pool
+3. If ALL keys exhausted (hit hard cap), returns `HTTP 429` with `retryAfter: 60`
+4. Keys auto-recover as 60-second windows slide
 
 ---
 
 ## Environment Variables
 
-> These are only used for **initial seeding** on first run. After that, use the dashboard Settings tab.
+> Initial seeding only. Use dashboard Settings after first boot.
 
-| Variable               | Default | Description                              |
-|------------------------|---------|------------------------------------------|
-| `PORT`                 | `3000`  | Server port                              |
-| `PROXY_AUTH_TOKEN`     | —       | Your team's shared secret token          |
-| `ROTATION_THRESHOLD`   | `32`    | Rotate key at this many req/min          |
-| `MAX_REQUESTS_PER_MINUTE` | `35` | Hard cap per key                         |
-| `KEY_INJECT_MODE`      | `query` | `query` / `header` / `bearer`            |
-| `KEY_INJECT_PARAM`     | `api_key` | Query param name (if mode=query)       |
-| `KEY_INJECT_HEADER`    | `X-API-Key` | Header name (if mode=header)         |
+| Variable                  | Default   | Description                          |
+|---------------------------|-----------|--------------------------------------|
+| `PORT`                    | `51067`   | Server port                          |
+| `PROXY_AUTH_TOKEN`        | —         | Shared secret for proxy access       |
+| `DASHBOARD_USERNAME`      | `admin`   | Dashboard login username             |
+| `DASHBOARD_PASSWORD`      | `xwitchr@)@^` | Dashboard login password         |
+| `ROTATION_THRESHOLD`      | `32`      | Rotate key at this many req/min      |
+| `MAX_REQUESTS_PER_MINUTE` | `35`      | Hard cap per key per minute          |
+| `KEY_INJECT_MODE`         | `query`   | `query` / `header` / `bearer`        |
+| `KEY_INJECT_PARAM`        | `api_key` | Query param name (mode=query)        |
+| `KEY_INJECT_HEADER`       | `X-API-Key` | Header name (mode=header)          |
+
+---
+
+## Docker Notes
+
+- `config.json` and `data/` are mounted as volumes — persist across rebuilds
+- Create an empty `config.json` before first run: `echo '{}' > config.json`
+- Port `51067` must be open on your server firewall
