@@ -2,7 +2,7 @@ services:
   xwitchr:
     build: .
     ports:
-      - "3000:3000"
+      - "51067:51067"
     volumes:
       - ./data:/app/data
       - ./config.json:/app/config.json

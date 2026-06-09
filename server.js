@@ -25,7 +25,7 @@ const { generateToken } = configStore;
 const fmt = require('./src/formatConverter');
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.PORT || '3000', 10);
+const PORT = parseInt(process.env.PORT || '51067', 10);
 
 let cfg  = configStore.load();
 let pool = buildPool(cfg);

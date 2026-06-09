@@ -9,6 +9,6 @@ COPY . .
 
 RUN mkdir -p data
 
-EXPOSE 3000
+EXPOSE 51067
 
 CMD ["node", "server.js"]
