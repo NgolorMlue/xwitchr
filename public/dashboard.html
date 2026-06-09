@@ -1,0 +1,4083 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>XWITCHR</title>
+  <meta name="description" content="XWITCHR — live monitoring and configuration dashboard for API key switching across providers." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23f97316'/%3E%3Cg stroke='%23000000' stroke-linecap='round' stroke-linejoin='round' fill='none'%3E%3Cline x1='7' y1='8' x2='19' y2='16' stroke-width='2.8'/%3E%3Cline x1='19' y1='16' x2='25' y2='24' stroke-width='2.8'/%3E%3Cpolyline points='20,24 25,24 25,19' stroke='white' stroke-width='2.4'/%3E%3Cline x1='25' y1='8' x2='13' y2='16' stroke-width='2.8'/%3E%3Cline x1='13' y1='16' x2='7' y2='24' stroke-width='2.8'/%3E%3Cpolyline points='12,24 7,24 7,19' stroke='white' stroke-width='2.4'/%3E%3C/g%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root {
+      --bg:#0a0d14;--surface:#111620;--surface2:#161c2a;--surface3:#1a2235;
+      --border:#1e2a3d;--border2:#263347;
+      --text:#e4eaf5;--text-muted:#6b7a99;--text-dim:#3d4f6e;
+      --accent:#3b82f6;--green:#22c55e;--yellow:#eab308;--red:#ef4444;--purple:#a855f7;
+      --radius:12px;--font-mono:'JetBrains Mono',monospace;
+      --header-bg: rgba(10, 13, 20, 0.9);
+    }
+    body.theme-light {
+      --bg:#f8fafc;--surface:#ffffff;--surface2:#f1f5f9;--surface3:#e2e8f0;
+      --border:#cbd5e1;--border2:#94a3b8;
+      --text:#0f172a;--text-muted:#475569;--text-dim:#64748b;
+      --accent:#2563eb;--green:#16a34a;--yellow:#ca8a04;--red:#dc2626;--purple:#9333ea;
+      --header-bg: rgba(248, 250, 252, 0.9);
+    }
+    body.theme-night {
+      --bg:#000000;--surface:#0c0c0c;--surface2:#121212;--surface3:#181818;
+      --border:#1a1a1a;--border2:#262626;
+      --text:#f3f4f6;--text-muted:#9ca3af;--text-dim:#4b5563;
+      --accent:#3b82f6;--green:#10b981;--yellow:#f59e0b;--red:#ef4444;--purple:#8b5cf6;
+      --header-bg: rgba(0, 0, 0, 0.9);
+    }
+    html,body{height:100%;background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;font-size:14px;line-height:1.5;overflow-x:hidden}
+    ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+    /* ── Header ── */
+    .header{position:sticky;top:0;z-index:100;display:flex;align-items:center;justify-content:space-between;padding:0 28px;height:60px;background:var(--header-bg);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+    .header-left{display:flex;align-items:center;gap:20px}
+    .header-brand{display:flex;align-items:center;gap:10px;font-weight:600;font-size:15px}
+    .logo-icon{width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+    .logo-icon svg{width:32px;height:32px;display:block}
+    .tab-nav{display:flex;gap:2px}
+    .tab-btn{padding:6px 16px;border-radius:8px;border:none;cursor:pointer;background:none;color:var(--text-muted);font-size:13px;font-weight:500;font-family:'Inter',sans-serif;transition:background .15s,color .15s}
+    .tab-btn:hover{background:var(--surface2);color:var(--text)}
+    .tab-btn.active{background:var(--surface2);color:var(--text)}
+    .header-right{display:flex;align-items:center;gap:14px}
+    .live-badge{display:flex;align-items:center;gap:6px;padding:4px 10px;background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:99px;font-size:12px;font-weight:500;color:var(--green)}
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:pulse 1.5s infinite}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.65)}}
+    #clock{font-family:var(--font-mono);font-size:13px;color:var(--text-muted)}
+
+    /* ── Pages ── */
+    .page{display:none;padding:28px;max-width:1400px;margin:0 auto}
+    .page.active{display:flex;flex-direction:column;gap:20px}
+    .fade-in{animation:fadeIn .3s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ── Cards ── */
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px}
+    .section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+
+
+    /* ── Stats ── */
+    .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px}
+    .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 22px;display:flex;flex-direction:column;gap:6px;transition:transform .2s,border-color .2s,box-shadow .2s}
+    .stat-card:hover{transform:translateY(-2px);border-color:var(--border2);box-shadow:0 8px 24px rgba(0,0,0,.4)}
+    .stat-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+    .stat-value{font-size:28px;font-weight:700;line-height:1;letter-spacing:-.03em}
+    .stat-sub{font-size:12px;color:var(--text-muted)}
+    .c-accent{color:var(--accent)}.c-green{color:var(--green)}.c-yellow{color:var(--yellow)}.c-red{color:var(--red)}
+
+    /* ── Capacity Bar ── */
+    .capacity-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 24px}
+    .capacity-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+    .capacity-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted)}
+    .capacity-numbers{font-family:var(--font-mono);font-size:12px;color:var(--text-muted)}
+    .capacity-numbers strong{color:var(--text)}
+    .big-bar-wrap{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+    .big-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--purple));transition:width .6s ease}
+
+    /* ── Key Grid ── */
+    .key-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
+    .key-item{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:border-color .2s,box-shadow .2s}
+    .key-item.is-current{border-color:var(--accent);box-shadow:0 0 0 1px rgba(59,130,246,.15),0 0 18px rgba(59,130,246,.08)}
+    .key-item.is-near{border-color:var(--yellow)}
+    .key-item.is-exhausted{border-color:var(--red);opacity:.6}
+    .key-idx{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);text-align:center}
+    .key-info{overflow:hidden}
+    .key-hint{font-family:var(--font-mono);font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .key-url{font-size:10px;color:var(--text-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+    .key-bar-wrap{margin-top:5px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+    .key-bar{height:100%;border-radius:2px;transition:width .5s ease,background .4s ease}
+    .key-right{display:flex;align-items:center;gap:7px}
+    .key-count{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:nowrap}
+    .pill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:99px;white-space:nowrap}
+    .pill-active{background:rgba(59,130,246,.15);color:var(--accent)}
+    .pill-healthy{background:rgba(34,197,94,.1);color:var(--green)}
+    .pill-near{background:rgba(234,179,8,.1);color:var(--yellow)}
+    .pill-exhausted{background:rgba(239,68,68,.1);color:var(--red)}
+
+    /* ── Log Table ── */
+    .log-wrap{overflow:auto;max-height:300px;border-radius:8px;border:1px solid var(--border)}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    thead th{position:sticky;top:0;background:var(--surface2);padding:10px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
+    tbody tr{border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
+    tbody tr:hover{background:var(--surface2)}
+    tbody td{padding:8px 14px;color:var(--text-muted);white-space:nowrap;font-family:var(--font-mono);font-size:11px}
+    td.m{color:var(--accent);font-weight:600}
+    td.p{color:var(--text);max-width:220px;overflow:hidden;text-overflow:ellipsis}
+    td.s2{color:var(--green)}td.s4{color:var(--yellow)}td.s5{color:var(--red)}
+    .empty-row{text-align:center;padding:32px;color:var(--text-dim);font-size:13px;font-family:'Inter',sans-serif}
+
+    /* ── Setup Banner ── */
+    .setup-banner{display:none;align-items:center;gap:14px;padding:16px 22px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.25);border-radius:var(--radius)}
+    .setup-banner.visible{display:flex}
+    .setup-banner-text{flex:1;font-size:13px;color:var(--text-muted)}
+    .setup-banner-text strong{color:var(--yellow);display:block;margin-bottom:2px}
+    .go-settings-btn{padding:8px 18px;background:var(--yellow);color:#000;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+    .go-settings-btn:hover{opacity:.85}
+
+    /* ── Settings: Layout ── */
+    #page-settings {
+      height: calc(100vh - 60px);
+      overflow: hidden;
+      display: none;
+      padding: 20px 28px 24px 28px;
+      box-sizing: border-box;
+    }
+    #page-settings.active {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 20px;
+      flex: 1;
+      min-height: 0;
+    }
+    .settings-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      height: 100%;
+      min-height: 0;
+    }
+    .settings-col:first-child {
+      overflow-y: auto;
+      padding-right: 6px;
+    }
+    .settings-col:last-child .card {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      min-height: 0;
+    }
+    .form-group{display:flex;flex-direction:column;gap:6px}
+    .form-label{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+    .form-hint{font-size:11px;color:var(--text-dim);margin-top:2px}
+    .form-input,.form-select{background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:9px 13px;width:100%;transition:border-color .15s,box-shadow .15s;outline:none}
+    .form-input:focus,.form-select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.12)}
+    .form-input::placeholder{color:var(--text-dim)}
+    .form-select{appearance:none;cursor:pointer}
+    .form-select option{background:var(--surface2)}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+    /* ── Provider Table ── */
+    .provider-table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow-y: auto;
+      flex: 1;
+      min-height: 0;
+    }
+    .provider-table{width:100%;border-collapse:collapse}
+    .provider-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      background: var(--surface2);
+      padding: 9px 12px;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .07em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .provider-table tbody tr{border-bottom:1px solid var(--border);transition:background .12s}
+    .provider-table tbody tr:last-child{border-bottom:none}
+    .provider-table tbody tr:hover{background:rgba(22,28,42,.6)}
+    .provider-table td{padding:7px 8px;vertical-align:middle}
+    .provider-table td.td-num,.provider-table th.td-num{width:36px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--text-dim)}
+    .provider-table td.td-url,.provider-table th.td-url{width:28%}
+    .provider-table td.td-key,.provider-table th.td-key{width:28%}
+    .provider-table td.td-type,.provider-table th.td-type{width:80px;text-align:center}
+    .provider-table td.td-rpm,.provider-table th.td-rpm{width:60px;text-align:center}
+    .provider-table td.td-tpm,.provider-table th.td-tpm{width:60px;text-align:center}
+    .type-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:5px;color:var(--text);font-size:11px;padding:4px 4px;outline:none;cursor:pointer;font-family:var(--font-mono)}
+    .type-select:focus{border-color:var(--accent)}
+    .type-select.type-anthropic{border-color:rgba(139,92,246,.4);color:#c4b5fd}
+    .type-select.type-google{border-color:rgba(52,211,153,.4);color:#6ee7b7}
+    .type-select.type-openai{color:var(--text-dim)}
+    .provider-table td.td-models,.provider-table th.td-models{width:80px;text-align:center}
+    .provider-table td.td-en,.provider-table th.td-en{width:52px;text-align:center}
+    .provider-table td.td-del,.provider-table th.td-del{width:38px;text-align:center}
+    .toggle-btn{background:none;border:none;cursor:pointer;font-size:18px;line-height:1;padding:2px 4px;transition:opacity .15s}
+    .toggle-btn:hover{opacity:.7}
+    .api-mode-toggle{position:relative;display:inline-block;width:36px;height:20px;flex-shrink:0}
+    .api-mode-toggle input{opacity:0;width:0;height:0;position:absolute}
+    .api-mode-toggle .slider{position:absolute;inset:0;background:var(--surface2);border-radius:20px;cursor:pointer;transition:background .2s}
+    .api-mode-toggle .slider::before{content:'';position:absolute;width:14px;height:14px;left:3px;top:3px;background:#fff;border-radius:50%;transition:transform .2s}
+    .api-mode-toggle input:checked + .slider{background:var(--accent)}
+    .api-mode-toggle input:checked + .slider::before{transform:translateX(16px)}
+    .api-mode-toggle input:disabled + .slider{opacity:.5;cursor:default}
+    .provider-table tr.provider-disabled td{opacity:.4}
+    .tbl-num-input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:6px 4px;outline:none;transition:background .15s,border-color .15s;text-align:center}
+    .tbl-num-input:hover{background:var(--surface2);border-color:var(--border)}
+    .tbl-num-input:focus{background:var(--surface2);border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.1)}
+    .tbl-num-input::placeholder{color:var(--text-dim);font-size:11px}
+
+    .tbl-input{width:100%;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:12px;padding:6px 8px;outline:none;transition:background .15s,border-color .15s}
+    .tbl-input:hover{background:var(--surface2);border-color:var(--border)}
+    .tbl-input:focus{background:var(--surface2);border-color:var(--accent);box-shadow:0 0 0 2px rgba(59,130,246,.1)}
+    .tbl-input::placeholder{color:var(--text-dim)}
+    .tbl-input.key-input{font-size:12px}
+
+    .models-btn{background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-dim);font-size:11px;padding:4px 8px;cursor:pointer;white-space:nowrap;transition:border-color .15s,color .15s,background .15s;font-family:'Inter',sans-serif;line-height:1.3}
+    .models-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(59,130,246,.06)}
+    .models-btn.has-filter{border-color:rgba(59,130,246,.4);color:var(--accent);background:rgba(59,130,246,.08)}
+    .del-btn{background:none;border:none;cursor:pointer;color:var(--text-dim);font-size:15px;padding:4px 6px;border-radius:5px;transition:color .15s,background .15s;line-height:1}
+    .del-btn:hover{color:var(--red);background:rgba(239,68,68,.1)}
+
+    .add-row-btn{width:100%;padding:10px;background:none;border:none;border-top:1px solid var(--border);color:var(--text-dim);font-size:12px;font-family:'Inter',sans-serif;cursor:pointer;transition:background .15s,color .15s;text-align:center}
+    .add-row-btn:hover{background:rgba(59,130,246,.05);color:var(--accent)}
+
+    .provider-actions{display:flex;gap:8px;margin-top:10px;flex-shrink:0}
+
+    /* ── Effective Cap Badge ── */
+    .effective-cap-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);font-size:12px;font-weight:600;color:var(--green);font-family:var(--font-mono)}
+
+    /* ── Token in settings ── */
+    .token-field-row{display:flex;gap:8px;align-items:center}
+    .token-field-row .form-input{font-size:12px;letter-spacing:.03em}
+    .icon-btn{padding:9px 13px;border:1px solid var(--border2);border-radius:8px;background:var(--surface2);color:var(--text-muted);cursor:pointer;font-size:13px;transition:border-color .15s,color .15s,background .15s;white-space:nowrap;font-family:'Inter',sans-serif}
+    .icon-btn:hover{border-color:var(--border2);color:var(--text);background:var(--surface3)}
+    .icon-btn.accent{background:rgba(59,130,246,.1);border-color:rgba(59,130,246,.3);color:var(--accent)}
+    .icon-btn.accent:hover{background:rgba(59,130,246,.2)}
+
+    /* ── Save Bar ── */
+    .save-bar {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+      margin-top: 4px;
+    }
+    .save-btn{padding:10px 28px;background:linear-gradient(135deg,var(--accent),var(--purple));border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:opacity .15s,transform .1s}
+    .save-btn:hover{opacity:.9}
+    .save-btn:active{transform:scale(.97)}
+    .save-btn:disabled{opacity:.45;cursor:not-allowed}
+    .save-status{font-size:13px;transition:opacity .3s;display:flex;align-items:center;gap:8px}
+    .save-status.success{color:var(--green)}.save-status.error{color:var(--red)}.save-status.hidden{opacity:0}
+
+    .provider-count-badge{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:99px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);font-size:11px;font-weight:600;color:var(--accent);font-family:var(--font-mono)}
+
+    /* ── Model Modal ── */
+    .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;animation:fadeIn .15s ease}
+    .modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:600px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+    .modal-head{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--border)}
+    .modal-title{font-size:14px;font-weight:600;color:var(--text)}
+    .modal-subtitle{font-size:11px;color:var(--text-dim);margin-top:2px;font-family:var(--font-mono)}
+    .modal-close{background:none;border:none;color:var(--text-dim);font-size:20px;cursor:pointer;line-height:1;padding:4px;transition:color .15s}
+    .modal-close:hover{color:var(--text)}
+    .modal-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+    .modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+
+    .model-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+    .model-search{flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 12px;outline:none;transition:border-color .15s,box-shadow .15s}
+    .model-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.1)}
+    .model-search::placeholder{color:var(--text-dim)}
+
+    .load-models-btn{padding:8px 16px;background:linear-gradient(135deg,var(--accent),var(--purple));border:none;border-radius:8px;color:#fff;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;white-space:nowrap;transition:opacity .15s}
+    .load-models-btn:hover{opacity:.85}
+    .load-models-btn:disabled{opacity:.45;cursor:not-allowed}
+
+    .model-select-actions{display:flex;gap:6px}
+    .model-hint{font-size:11px;color:var(--text-dim);padding:8px 12px;background:rgba(59,130,246,.05);border:1px solid rgba(59,130,246,.15);border-radius:8px}
+
+    .model-list{display:flex;flex-direction:column;gap:2px;max-height:320px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:4px}
+    .model-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;cursor:pointer;transition:background .12s;user-select:none}
+    .model-item:hover{background:var(--surface2)}
+    .model-item input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0}
+    .model-item-name{font-family:var(--font-mono);font-size:12px;color:var(--text);flex:1}
+    .model-item-new{font-size:10px;padding:1px 6px;border-radius:4px;background:rgba(34,197,94,.12);color:var(--green);font-weight:600}
+    .model-empty{text-align:center;padding:28px;color:var(--text-dim);font-size:13px}
+    .model-loading{text-align:center;padding:28px;color:var(--text-muted);font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .spinner{width:16px;height:16px;border:2px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite}
+
+    .model-stats{font-size:11px;color:var(--text-muted);font-family:var(--font-mono)}
+    .model-stats strong{color:var(--text)}
+
+    .clear-btn{background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;transition:border-color .15s,color .15s}
+    .clear-btn:hover{border-color:var(--border2);color:var(--text)}
+
+    .model-item-status{font-size:11px;font-family:var(--font-mono);white-space:nowrap;margin-left:auto;padding-left:10px}
+    .status-testing{color:var(--text-muted);animation:pulse 1.5s infinite}
+    .status-alive{color:var(--green);font-weight:600}
+    .status-dead{color:var(--red);font-weight:600}
+
+    /* ── Login Overlay ── */
+    .login-overlay{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;animation:fadeIn .3s ease}
+    .login-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;padding:36px 40px;max-width:420px;width:100%;text-align:center;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+    .login-logo{width:56px;height:56px;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px}
+    .login-logo svg{width:56px;height:56px;display:block}
+    .login-title{font-size:18px;font-weight:700;margin-bottom:4px}
+    .login-sub{font-size:13px;color:var(--text-muted);margin-bottom:24px}
+    .login-input{width:100%;background:var(--surface2);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-family:var(--font-mono);font-size:13px;padding:12px 16px;outline:none;transition:border-color .15s,box-shadow .15s;text-align:center;letter-spacing:.03em}
+    .login-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(59,130,246,.15)}
+    .login-input::placeholder{color:var(--text-dim)}
+    .login-btn{margin-top:14px;width:100%;padding:11px;background:linear-gradient(135deg,var(--accent),var(--purple));border:none;border-radius:10px;color:#fff;font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:opacity .15s}
+    .login-btn:hover{opacity:.9}
+    .login-error{margin-top:10px;font-size:12px;color:var(--red);min-height:18px}
+
+    /* ── Fullscreen Request Log & Advanced Filters ── */
+    .card.fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
+      background: var(--bg);
+      padding: 24px;
+      border-radius: 0;
+      border: none;
+      display: flex;
+      flex-direction: column;
+    }
+    .card.fullscreen .log-wrap {
+      flex: 1;
+      max-height: none !important;
+    }
+    .adv-filter-row {
+      display: grid;
+      grid-template-columns: 150px 120px 1fr 32px;
+      gap: 8px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    @media(max-width: 600px) {
+      .adv-filter-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* ── Responsive ── */
+    @media(max-width:1000px){.settings-grid{grid-template-columns:1fr}}
+    @media(max-width:960px){.charts-row{grid-template-columns:1fr !important}}
+    @media(max-width:860px){.stats-row{grid-template-columns:1fr 1fr}}
+    @media(max-width:540px){.stats-row{grid-template-columns:1fr};.page{padding:14px};.header{padding:0 14px}}
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div class="login-overlay" id="loginOverlay" style="display:none">
+  <div class="login-box">
+    <div class="login-logo"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 56 56"><rect width="56" height="56" fill="#b24d24"/><g stroke="#000000" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="12" y1="14" x2="33" y2="28" stroke-width="4.5"/><line x1="33" y1="28" x2="44" y2="42" stroke-width="4.5"/><polyline points="35,43 44,43 44,34" stroke="white" stroke-width="4"/><line x1="44" y1="14" x2="23" y2="28" stroke-width="4.5"/><line x1="23" y1="28" x2="12" y2="42" stroke-width="4.5"/><polyline points="21,43 12,43 12,34" stroke="white" stroke-width="4"/></g></svg></div>
+    <div class="login-title">XWITCHR</div>
+    <div class="login-sub">Enter credentials to unlock the dashboard.</div>
+    <input class="login-input" id="loginUsernameInput" type="text" placeholder="Username" autocomplete="username" style="margin-bottom:12px" />
+    <input class="login-input" id="loginPasswordInput" type="password" placeholder="Password" autocomplete="current-password" />
+    <button class="login-btn" id="loginBtn" onclick="doLogin()">Unlock Dashboard</button>
+    <div class="login-error" id="loginError"></div>
+  </div>
+</div>
+
+<header class="header">
+  <div class="header-left">
+    <div class="header-brand">
+      <div class="logo-icon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="#b24d24"/><g stroke="#000000" stroke-linecap="round" stroke-linejoin="round" fill="none"><line x1="7" y1="8" x2="19" y2="16" stroke-width="2.8"/><line x1="19" y1="16" x2="25" y2="24" stroke-width="2.8"/><polyline points="20,24 25,24 25,19" stroke="white" stroke-width="2.4"/><line x1="25" y1="8" x2="13" y2="16" stroke-width="2.8"/><line x1="13" y1="16" x2="7" y2="24" stroke-width="2.8"/><polyline points="12,24 7,24 7,19" stroke="white" stroke-width="2.4"/></g></svg></div>
+      <span>XWITCHR</span>
+    </div>
+    <nav class="tab-nav">
+      <button class="tab-btn active" id="tab-monitor" onclick="switchTab('monitor')">📡 Monitor</button>
+      <button class="tab-btn" id="tab-statistics" onclick="switchTab('statistics')">📈 Statistics</button>
+      <button class="tab-btn" id="tab-log" onclick="switchTab('log')">📋 Log</button>
+      <button class="tab-btn" id="tab-models" onclick="switchTab('models')">🤖 Models</button>
+      <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
+      <button class="tab-btn" id="tab-profile" onclick="switchTab('profile')">👤 Profile</button>
+    </nav>
+  </div>
+  <div class="header-right">
+    <div class="live-badge"><div class="live-dot"></div>Live</div>
+    <select id="themeSelect" onchange="changeTheme()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:12px; padding:4px 8px; outline:none; cursor: pointer; font-family:'Inter',sans-serif; transition: background .15s, border-color .15s, color .15s;">
+      <option value="dark">🌑 Dark Mode</option>
+      <option value="night">🖤 Night Mode</option>
+      <option value="light">☀️ Light Mode</option>
+    </select>
+    <div id="clock">--:--:--</div>
+  </div>
+</header>
+
+<!-- ══ MONITOR ══ -->
+<div class="page active fade-in" id="page-monitor">
+
+  <div class="setup-banner" id="setupBanner">
+    <div style="font-size:22px">⚠️</div>
+    <div class="setup-banner-text">
+      <strong>Router not configured yet</strong>
+      Add your API providers in the Settings tab to get started.
+    </div>
+    <button class="go-settings-btn" onclick="switchTab('settings')">Go to Settings →</button>
+  </div>
+
+  <!-- Provider Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Healthy</div>
+      <div class="stat-value c-green" id="statHealthy">—</div>
+      <div class="stat-sub" id="statTotal">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Near Limit</div>
+      <div class="stat-value c-yellow" id="statNear">—</div>
+      <div class="stat-sub">at threshold</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Exhausted</div>
+      <div class="stat-value c-red" id="statExhausted">—</div>
+      <div class="stat-sub">at hard cap</div>
+    </div>
+  </div>
+
+  <!-- Capacity Bar -->
+  <div class="capacity-card">
+    <div class="capacity-header">
+      <div class="capacity-label">Pool Utilization</div>
+      <div class="capacity-numbers"><strong id="capUsed">0</strong> / <span id="capTotal">—</span> req/min &nbsp;(<span id="capPct">0</span>%)</div>
+    </div>
+    <div class="big-bar-wrap"><div class="big-bar" id="bigBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Key Grid -->
+  <div class="card">
+    <div class="section-header">
+      <div class="section-title">All Providers — 24 / 7</div>
+      <div style="font-size:11px;color:var(--text-dim);font-family:var(--font-mono)" id="poolSummary">—</div>
+    </div>
+    <div class="key-grid" id="keyGrid">
+      <div class="empty-row" style="grid-column:1/-1">Waiting for configuration…</div>
+    </div>
+  </div>
+
+</div><!-- end monitor -->
+
+<!-- ══ STATISTICS ══ -->
+<div class="page fade-in" id="page-statistics">
+
+
+  <!-- Client Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Requests / min</div>
+      <div class="stat-value c-accent" id="statReq">—</div>
+      <div class="stat-sub" id="statCap">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Connected Apps</div>
+      <div class="stat-value c-purple" id="statConnectedClients">0</div>
+      <div class="stat-sub" id="statClientsList" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="Active clients">No active apps</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Tokens (Last 200)</div>
+      <div class="stat-value c-accent" id="statTokens">0</div>
+      <div class="stat-sub" id="statTokensBreakdown">P: 0 · C: 0</div>
+    </div>
+  </div>
+
+  <!-- Live Analytics Charts Grid -->
+  <div class="charts-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+    <!-- Line Chart Card -->
+    <div class="card" style="display: flex; flex-direction: column; gap: 10px; min-height: 250px;">
+      <div class="section-header" style="margin-bottom: 8px;">
+        <div class="section-title" id="trendChartTitle" style="margin-bottom: 0;">📊 Analytics Trend (Last 5 mins)</div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <select id="trendTimeframeSelect" onchange="updateCharts(_activeLogs)" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;">
+            <option value="5m">Last 5 mins</option>
+            <option value="30m">Last 30 mins</option>
+            <option value="1h">Last 1 hour</option>
+            <option value="24h">Last 24 hours</option>
+          </select>
+          <select id="chartViewSelect" onchange="toggleChartView()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;">
+            <option value="rpm">Requests &amp; Latency</option>
+            <option value="tokens">Token Throughput</option>
+          </select>
+        </div>
+      </div>
+      <div style="flex: 1; position: relative;">
+        <canvas id="analyticsLineChart" style="width: 100%; height: 180px;"></canvas>
+      </div>
+    </div>
+    <!-- Donut Chart Card -->
+    <div class="card" style="display: flex; flex-direction: column; gap: 10px; min-height: 250px;">
+      <div class="section-header" style="margin-bottom: 8px;">
+        <div class="section-title" style="margin-bottom: 0;">🍩 Status Code Distribution</div>
+      </div>
+      <div style="flex: 1; position: relative; display: flex; justify-content: center; align-items: center;">
+        <div style="width: 150px; height: 150px; position: relative;">
+          <canvas id="analyticsDonutChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historical & Current Split View Mirror Graph -->
+  <div class="card" style="margin-top: 16px; display: flex; flex-direction: column; gap: 10px; min-height: 280px;">
+    <div class="section-header" style="margin-bottom: 8px; flex-wrap: wrap; gap: 12px;">
+      <div class="section-title" style="margin-bottom: 0;">📊 Requests vs. Tokens Mirror Analysis</div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <label style="font-size: 11px; color: var(--text-muted); margin-bottom: 0;">Date:</label>
+        <input id="mirrorChartDate" type="date" onchange="updateMirrorChart()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;" />
+        
+        <label style="font-size: 11px; color: var(--text-muted); margin-bottom: 0; margin-left: 6px;">Timeframe:</label>
+        <select id="mirrorChartTimeframe" onchange="onMirrorTimeframeChange()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;">
+          <option value="all">All Day</option>
+          <option value="last1h">Last 1 Hour</option>
+          <option value="last6h">Last 6 Hours</option>
+          <option value="custom">Custom Range</option>
+        </select>
+
+        <div id="mirrorCustomTimeRange" style="display: none; align-items: center; gap: 4px;">
+          <input id="mirrorChartStartTime" type="time" onchange="updateMirrorChart()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;" />
+          <span style="font-size: 11px; color: var(--text-muted);">to</span>
+          <input id="mirrorChartEndTime" type="time" onchange="updateMirrorChart()" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:3px 6px; outline:none; cursor: pointer;" />
+        </div>
+      </div>
+    </div>
+    <div style="flex: 1; position: relative;">
+      <canvas id="analyticsMirrorChart" style="width: 100%; height: 190px;"></canvas>
+    </div>
+  </div>
+
+</div><!-- end statistics -->
+
+<!-- ══ LOG ══ -->
+<div class="page fade-in" id="page-log">
+
+  <!-- Log -->
+  <div class="card" id="logCard">
+    <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
+      <div class="section-title">Request Log</div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="icon-btn" onclick="toggleAdvancedFilterPanel()" id="advFilterToggleBtn">⚙️ Advanced Filters</button>
+        <button class="icon-btn" onclick="toggleLogFullscreen()" id="fullscreenLogBtn">🖥️ Fullscreen</button>
+        <input id="logSearchInput" type="text" placeholder="Search path / provider..." 
+          style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:12px; padding:4px 10px; outline:none; width: 180px;" oninput="filterLogs()" />
+        <select id="logStatusFilter" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:12px; padding:4px 6px; outline:none; cursor: pointer;" onchange="filterLogs()">
+          <option value="all">All Statuses</option>
+          <option value="success">Success (2xx/3xx)</option>
+          <option value="clientError">Client Error (4xx)</option>
+          <option value="serverError">Server Error (5xx)</option>
+        </select>
+        <button class="clear-btn" onclick="clearLogs()" style="margin-left: 4px;">Clear</button>
+      </div>
+    </div>
+
+    <!-- Advanced Filters Panel -->
+    <div id="advFilterPanel" style="display: none; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 12px; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
+          <span>Match</span>
+          <select id="advFilterJoin" onchange="changeAdvJoin()" style="background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; color: var(--text); padding: 3px 6px; cursor: pointer; outline: none; font-size: 12px; font-weight: 600;">
+            <option value="and">ALL (AND)</option>
+            <option value="or">ANY (OR)</option>
+          </select>
+          <span>of the following conditions:</span>
+        </div>
+        <button class="icon-btn accent" onclick="addAdvFilterRow()" style="font-size: 12px; padding: 4px 10px;">＋ Add Condition</button>
+      </div>
+      <div id="advFilterRows" style="display: flex; flex-direction: column; gap: 8px;">
+        <!-- Filter rows injected here -->
+      </div>
+    </div>
+    <div class="log-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Provider</th><th>Key</th><th>Tokens</th><th>Status</th><th>RT</th></tr></thead>
+        <tbody id="logBody">
+          <tr><td colspan="8" class="empty-row">No requests yet — send traffic through /proxy/*</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div><!-- end log -->
+
+<!-- ══ MODELS ══ -->
+<div class="page fade-in" id="page-models">
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total Unique Models</div>
+      <div class="stat-value c-accent" id="modelTabTotalModels">—</div>
+      <div class="stat-sub">configured in pool</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Used Models (Active Logs)</div>
+      <div class="stat-value c-green" id="modelTabUsedModels">—</div>
+      <div class="stat-sub">active in recent requests</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Avg Latency (Success)</div>
+      <div class="stat-value c-yellow" id="modelTabAvgLatency">—</div>
+      <div class="stat-sub">across all requests</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Most Active Model</div>
+      <div class="stat-value c-purple" id="modelTabActiveModel" style="font-size: 13px; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-top: 6px;">—</div>
+      <div class="stat-sub" id="modelTabActiveCount">No requests yet</div>
+    </div>
+  </div>
+
+  <!-- API Provider Model Manager Card -->
+  <div class="card" id="modelsTabManagerCard">
+    <div class="section-header" style="flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="section-title" style="margin-bottom: 0;">🗝️ Provider Model Enable/Disable Manager</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="load-models-btn" id="modelsTabLoadBtn" onclick="modelsTabLoadFromApi()" style="padding: 6px 14px; font-size: 12px;">⬇️ Load Models from All Providers</button>
+      </div>
+    </div>
+
+    <!-- Manager Container -->
+    <div id="modelsTabManagerContainer" style="display: none; flex-direction: column; gap: 12px;">
+      <div style="font-size:11px; color:var(--text-muted); padding: 8px 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 8px;">
+        Uncheck models to <strong>disable (block)</strong> them across all providers. Checked models are allowed. Empty selection allows all models.
+      </div>
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+          <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabSelectAll()">✓ Select All</button>
+          <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabDeselectAll()">✗ Select None</button>
+          <button class="icon-btn" id="modelsTabCheckAliveBtn" style="font-size:11px; padding: 4px 10px; background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3);" onclick="modelsTabCheckAllAlive()">🩺 Check Alive &amp; Auto-Block Dead</button>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span id="modelsTabAliveProgress" style="font-size:10px; color:var(--text-muted); display:none;"></span>
+          <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
+            Selected: <strong id="modelsTabSelCount" style="color: var(--text)">0</strong> / <strong id="modelsTabTotCount" style="color: var(--text)">0</strong>
+          </div>
+        </div>
+      </div>
+
+      <!-- Search & Filters for Manager List -->
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+        <input id="modelsTabManagerSearchInput" type="text" placeholder="Search manager models..." 
+          style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; width: 200px;" oninput="renderModelsTabManagerList()" />
+        <select id="modelsTabManagerStatusFilter" onchange="renderModelsTabManagerList()"
+          style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; cursor: pointer;">
+          <option value="all">🟢 All Statuses</option>
+          <option value="alive">✅ Alive Only</option>
+          <option value="dead">❌ Dead Only</option>
+          <option value="unchecked">❓ Not Checked</option>
+        </select>
+      </div>
+
+      <div class="model-list" id="modelsTabModelList" style="max-height: 340px;">
+        <!-- Checkboxes inject here -->
+      </div>
+
+      <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+        <button class="save-btn" id="modelsTabSaveBtn" onclick="modelsTabSaveSelection()" style="padding: 8px 20px; font-size: 12px;">💾 Save Selection</button>
+        <span id="modelsTabSaveStatus" style="font-size: 12px; transition: opacity 0.3s;" class="save-status hidden"></span>
+      </div>
+    </div>
+    
+    <div id="modelsTabManagerEmptyHint" style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
+      Click "Load Models from All Providers" to fetch and manage models across all configured API providers.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="section-header" style="flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px">
+      <div class="section-title" style="margin-bottom:0">Models Directory &amp; Latency Analytics</div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto">
+        <!-- Date range -->
+        <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:3px 10px">
+          <span style="font-size:11px;color:var(--text-muted)">From</span>
+          <input id="modelTabDateFrom" type="date" onchange="modelTabFetchLogs()"
+            style="background:transparent;border:none;color:var(--text);font-size:11px;outline:none;cursor:pointer" />
+          <span style="font-size:11px;color:var(--text-muted)">To</span>
+          <input id="modelTabDateTo" type="date" onchange="modelTabFetchLogs()"
+            style="background:transparent;border:none;color:var(--text);font-size:11px;outline:none;cursor:pointer" />
+          <button onclick="modelTabClearDates()" title="Clear date filter"
+            style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:12px;padding:0 2px;line-height:1">✕</button>
+        </div>
+        <input id="modelTabSearchInput" type="text" placeholder="Search model..."
+          style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:4px 10px;outline:none;width:180px" oninput="renderModelsTab()" />
+        <select id="modelTabStatusFilter" onchange="renderModelsTab()"
+          style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:12px;padding:4px 10px;outline:none;cursor:pointer">
+          <option value="all">🟢 Active (hide dead)</option>
+          <option value="alive">✅ Alive Only</option>
+          <option value="dead">❌ Dead Only</option>
+          <option value="unchecked">❓ Not Checked</option>
+        </select>
+        <button class="models-btn" onclick="checkAllModelsAlive()">Check All Alive</button>
+      </div>
+    </div>
+    <!-- Date filter active indicator -->
+    <div id="modelTabDateBanner" style="display:none;font-size:11px;color:var(--accent);padding:4px 0 10px;margin-top:-4px">
+      📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
+    </div>
+    <div class="log-wrap" style="max-height:500px">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:46px;text-align:center">Enable</th>
+            <th onclick="sortModelTab('name')" style="cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></th>
+            <th onclick="sortModelTab('requestCount')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></th>
+            <th onclick="sortModelTab('totalTokens')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Total Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></th>
+            <th onclick="sortModelTab('avgLatency')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></th>
+            <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
+            <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
+            <th style="text-align:center">Alive</th>
+          </tr>
+        </thead>
+        <tbody id="modelTabBody">
+          <tr><td colspan="8" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SETTINGS ══ -->
+<div class="page fade-in" id="page-settings">
+  <div class="settings-grid">
+
+    <!-- LEFT: Config -->
+    <div class="settings-col">
+
+      <!-- Key Injection -->
+      <div class="card">
+        <div class="section-header"><div class="section-title">💉 Key Injection</div></div>
+        <div class="form-hint" style="margin-bottom:12px">How should the API key be sent to each provider?</div>
+        <div class="form-group">
+          <label class="form-label" for="keyInjectMode">Mode</label>
+          <select class="form-select" id="keyInjectMode" onchange="onModeChange()">
+            <option value="bearer">Bearer Token — Authorization: Bearer KEY</option>
+            <option value="query">Query Param — ?api_key=KEY</option>
+            <option value="header">Custom Header — X-API-Key: KEY</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group" id="paramGroup">
+            <label class="form-label" for="keyInjectParam">Param Name</label>
+            <input class="form-input" id="keyInjectParam" type="text" placeholder="api_key" />
+          </div>
+          <div class="form-group" id="headerGroup">
+            <label class="form-label" for="keyInjectHeader">Header Name</label>
+            <input class="form-input" id="keyInjectHeader" type="text" placeholder="X-API-Key" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Rotation -->
+      <div class="card">
+        <div class="section-header"><div class="section-title">🔄 Rotation Settings</div></div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="rotationThreshold">Rotate At</label>
+            <input class="form-input" id="rotationThreshold" type="number" min="1" max="999" placeholder="32" oninput="updateCapBadge()" />
+            <div class="form-hint">Switch key at this req/min</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="maxPerMinute">Hard Cap</label>
+            <input class="form-input" id="maxPerMinute" type="number" min="1" max="9999" placeholder="35" oninput="updateCapBadge()" />
+            <div class="form-hint">Provider's real limit</div>
+          </div>
+        </div>
+        <div style="margin-top:14px;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">EFFECTIVE CAPACITY</div>
+          <div class="effective-cap-badge" id="capBadge">— req/min</div>
+          <div style="font-size:11px;color:var(--text-dim);margin-top:8px" id="capExplain">—</div>
+        </div>
+      </div>
+
+
+    </div><!-- end left col -->
+
+    <!-- RIGHT: Providers -->
+    <div class="settings-col">
+      <div class="card" style="flex:1">
+        <div class="section-header">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div class="section-title">🗝️ API Providers</div>
+            <div class="provider-count-badge" id="providerCount">0 providers</div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="icon-btn" onclick="toggleAllKeys()" id="showAllBtn">Show Keys</button>
+            <button class="icon-btn" onclick="importProviders()">📥 Import</button>
+          </div>
+        </div>
+
+        <div class="form-hint" style="margin-bottom:12px">
+          Each row is one API provider. All providers are active 24/7, rotating automatically.
+          Different providers can have different base URLs.
+        </div>
+
+        <div class="provider-table-wrap">
+          <table class="provider-table">
+            <thead>
+              <tr>
+                <th class="td-num">#</th>
+                <th class="td-url">API Base URL</th>
+                <th class="td-key">API Key</th>
+                <th class="td-type" title="Provider API format">Type</th>
+                <th class="td-rpm" title="Max requests per minute (overrides global)">RPM</th>
+                <th class="td-tpm" title="Max tokens per minute">TPM</th>
+                <th class="td-models">Models</th>
+                <th class="td-en" title="Enable/disable provider">On</th>
+                <th class="td-del"></th>
+              </tr>
+            </thead>
+            <tbody id="providerBody"></tbody>
+          </table>
+          <button class="add-row-btn" onclick="addProviderRow()">＋ Add Provider</button>
+        </div>
+
+        <div class="provider-actions">
+          <button class="icon-btn" style="font-size:12px" onclick="duplicateLastUrl()">📋 Duplicate Last URL</button>
+          <button class="icon-btn" style="font-size:12px;color:var(--accent);border-color:rgba(59,130,246,.2)" onclick="copyModelsFromFirstToOthers()">📋 Copy Provider #1 Models to All Others</button>
+          <button class="icon-btn" style="font-size:12px;color:var(--red);border-color:rgba(239,68,68,.2)" onclick="clearAllProviders()">🗑️ Clear All</button>
+        </div>
+
+        <!-- Import hint -->
+        <div id="importHint" style="display:none;margin-top:12px;padding:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-muted)">
+          <strong style="color:var(--text)">Import format</strong> — paste one provider per line:<br>
+          <code style="color:var(--accent)">https://api.openai.com/v1, sk-abc123</code><br>
+          <code style="color:var(--accent)">https://api.nvidia.com/v1, nvapi-xyz</code>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <textarea id="importArea" style="width:100%;background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-family:var(--font-mono);font-size:11px;padding:8px;resize:vertical;min-height:80px;outline:none" placeholder="https://api.example.com/v1, key1&#10;https://api.example.com/v1, key2"></textarea>
+          </div>
+          <div style="margin-top:8px;display:flex;gap:8px">
+            <button class="icon-btn accent" onclick="doImport()">Import</button>
+            <button class="icon-btn" onclick="hideImport()">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Save Bar -->
+  <div class="save-bar">
+    <button class="save-btn" id="saveBtn" onclick="saveConfig()">💾 Save &amp; Apply</button>
+    <div class="save-status hidden" id="saveStatus"></div>
+    <div style="flex:1"></div>
+    <div style="font-size:11px;color:var(--text-dim)">Saved to <code style="color:var(--text-muted)">config.json</code> — no restart needed</div>
+  </div>
+</div><!-- end settings -->
+
+<!-- ══ PROFILE ══ -->
+<div class="page fade-in" id="page-profile">
+  <div style="display:flex;flex-direction:column;gap:16px;max-width:1100px;margin:0 auto;width:100%">
+
+    <!-- Row 1: Identity + Security -->
+    <div style="display:grid;grid-template-columns:260px 1fr;gap:16px">
+
+      <!-- Identity -->
+      <div class="card" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 20px;text-align:center">
+        <div style="width:64px;height:64px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px">👤</div>
+        <div>
+          <div id="profileUsernameDisplay" style="font-size:17px;font-weight:600;color:var(--text)">admin</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:2px">Dashboard Administrator</div>
+        </div>
+        <div style="width:100%;height:1px;background:var(--border)"></div>
+        <div style="width:100%;text-align:left;font-size:12px;display:flex;flex-direction:column;gap:6px">
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Session:</span><span style="color:var(--green);font-weight:600">Active</span></div>
+          <div style="display:flex;justify-content:space-between"><span style="color:var(--text-muted)">Role:</span><span>Super Admin</span></div>
+        </div>
+        <button class="save-btn" style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);color:var(--red);width:100%;padding:8px;font-size:12px;margin-top:4px" onclick="doLogout()">🚪 Log Out</button>
+      </div>
+
+      <!-- Security -->
+      <div class="card" style="display:flex;flex-direction:column;gap:14px">
+        <div class="section-header" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:2px">
+          <div class="section-title" style="margin-bottom:0">🔒 Security Settings</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div>
+            <label class="form-label" for="updateUsername">Username</label>
+            <input class="form-input" id="updateUsername" type="text" placeholder="admin" style="font-size:13px" />
+          </div>
+          <div></div>
+          <div>
+            <label class="form-label" for="currentPassword">Current Password</label>
+            <input class="form-input" id="currentPassword" type="password" placeholder="••••••••" style="font-size:13px" />
+          </div>
+          <div>
+            <label class="form-label" for="newPassword">New Password</label>
+            <input class="form-input" id="newPassword" type="password" placeholder="••••••••" style="font-size:13px" />
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <button class="save-btn" style="padding:9px 20px;font-size:13px" onclick="changePassword(event)">Update Credentials</button>
+          <div class="form-hint" id="passwordChangeStatus" style="font-size:12px;min-height:16px;margin:0"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: API Access (3 cols) -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+
+      <!-- OpenAI -->
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="font-size:14px;font-weight:600;flex:1">OpenAI Compatible</div>
+          <label class="api-mode-toggle" title="Always enabled">
+            <input type="checkbox" checked disabled />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">Base URL</label>
+          <div class="token-field-row">
+            <input class="form-input" id="profileBaseUrl" type="text" readonly style="font-size:11px;font-family:var(--font-mono);cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn accent" onclick="copyProfileField('profileBaseUrl',event)" title="Copy">📋</button>
+          </div>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">API Key</label>
+          <div class="token-field-row">
+            <input class="form-input" id="proxyAuthToken" type="password" readonly style="font-size:11px;letter-spacing:.04em;cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn" onclick="toggleTokenVis('proxyAuthToken','toggleOAIBtn',event)" id="toggleOAIBtn" title="Show/Hide">👁️</button>
+            <button class="icon-btn accent" onclick="copyProfileField('proxyAuthToken',event)" title="Copy">📋</button>
+            <button class="icon-btn" onclick="regenToken('proxyAuthToken')" title="Regenerate">🔄</button>
+          </div>
+        </div>
+        <div class="form-hint" style="margin:0">Set as <code style="color:var(--accent)">OPENAI_BASE_URL</code> or <code style="color:var(--accent)">openai.base_url</code></div>
+      </div>
+
+      <!-- Anthropic -->
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="font-size:14px;font-weight:600;flex:1">Anthropic (Claude)</div>
+          <label class="api-mode-toggle" title="Enable Anthropic API mode">
+            <input type="checkbox" id="apiModeAnthropic" onchange="updateApiMode('anthropic',this.checked)" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">Base URL</label>
+          <div class="token-field-row">
+            <input class="form-input" id="profileAnthropicUrl" type="text" readonly style="font-size:11px;font-family:var(--font-mono);cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn accent" onclick="copyProfileField('profileAnthropicUrl',event)" title="Copy">📋</button>
+          </div>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">API Key</label>
+          <div class="token-field-row">
+            <input class="form-input" id="anthropicProxyToken" type="password" readonly style="font-size:11px;letter-spacing:.04em;cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn" onclick="toggleTokenVis('anthropicProxyToken','toggleAntBtn',event)" id="toggleAntBtn" title="Show/Hide">👁️</button>
+            <button class="icon-btn accent" onclick="copyProfileField('anthropicProxyToken',event)" title="Copy">📋</button>
+            <button class="icon-btn" onclick="regenToken('anthropicProxyToken')" title="Regenerate">🔄</button>
+          </div>
+        </div>
+        <div class="form-hint" style="margin:0">Use: <code style="color:var(--accent)">ANTHROPIC_BASE_URL</code> + <code style="color:var(--accent)">ANTHROPIC_API_KEY</code></div>
+      </div>
+
+      <!-- Google -->
+      <div class="card" style="display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+          <div style="font-size:14px;font-weight:600;flex:1">Google (Gemini)</div>
+          <label class="api-mode-toggle" title="Enable Google Gemini API mode">
+            <input type="checkbox" id="apiModeGoogle" onchange="updateApiMode('google',this.checked)" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">Base URL</label>
+          <div class="token-field-row">
+            <input class="form-input" id="profileGoogleUrl" type="text" readonly style="font-size:11px;font-family:var(--font-mono);cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn accent" onclick="copyProfileField('profileGoogleUrl',event)" title="Copy">📋</button>
+          </div>
+        </div>
+        <div>
+          <label class="form-label" style="margin-bottom:3px">API Key</label>
+          <div class="token-field-row">
+            <input class="form-input" id="googleProxyToken" type="password" readonly style="font-size:11px;letter-spacing:.04em;cursor:default;color:var(--text-muted)" />
+            <button class="icon-btn" onclick="toggleTokenVis('googleProxyToken','toggleGooBtn',event)" id="toggleGooBtn" title="Show/Hide">👁️</button>
+            <button class="icon-btn accent" onclick="copyProfileField('googleProxyToken',event)" title="Copy">📋</button>
+            <button class="icon-btn" onclick="regenToken('googleProxyToken')" title="Regenerate">🔄</button>
+          </div>
+        </div>
+        <div class="form-hint" style="margin:0">Use with OpenAI SDK pointed at Google base URL.</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODEL MODAL ══ -->
+<div id="modelModal" class="modal-overlay" style="display:none" onclick="onModalOverlayClick(event)">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">🎯 Model Filter</div>
+        <div class="modal-subtitle" id="modalProviderUrl">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModelModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="model-hint">Unchecked models will be <strong>blocked</strong> for this provider. Leave <em>all unchecked</em> to allow every model.</div>
+
+      <div class="model-toolbar">
+        <button class="load-models-btn" id="loadModelsBtn" onclick="loadModels()">⬇️ Load Models from API</button>
+        <input class="model-search" id="modelSearch" placeholder="Search models…" oninput="filterModels()" />
+        <div class="model-select-actions">
+          <button class="icon-btn" style="font-size:12px" onclick="selectAllModels()">✓ All</button>
+          <button class="icon-btn" style="font-size:12px" onclick="deselectAllModels()">✗ None</button>
+        </div>
+      </div>
+
+      <div class="model-toolbar" style="margin-top: 8px; justify-content: flex-start; align-items: center; gap: 8px;">
+        <span style="font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .05em;">Copy Config From:</span>
+        <select class="form-select" id="modelCopySourceSelect" style="padding: 4px 8px; font-size: 11px; height: 26px; width: auto; min-width: 180px; font-family: var(--font-mono); cursor: pointer;" onchange="copyModelsFromProvider(this.value)">
+          <option value="">-- Select Provider --</option>
+        </select>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div class="model-stats">Showing <strong id="modelShowCount">0</strong> / <strong id="modelTotalCount">0</strong> models · <strong id="modelSelectedCount">0</strong> selected</div>
+      </div>
+
+      <!-- Test Bar -->
+      <div class="model-test-bar" style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
+        <button class="icon-btn accent" id="testModelsBtn" onclick="testSelectedModels()" style="font-size:11px;padding:5px 10px;height:28px">⚡ Test Checked Models</button>
+        <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;user-select:none;margin-bottom:0">
+          <input type="checkbox" id="autoExcludeDead" checked style="width:13px;height:13px;accent-color:var(--accent)" />
+          Auto-exclude dead models
+        </label>
+        <div style="flex:1"></div>
+        <div id="testProgress" style="font-size:11px;color:var(--text-muted);font-family:var(--font-mono)"></div>
+      </div>
+
+      <div class="model-list" id="modelList">
+        <div class="model-empty">Click "Load Models from API" to fetch available models.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="save-btn" style="padding:9px 24px;font-size:13px" onclick="saveModelSelection()">✅ Apply &amp; Save</button>
+      <button class="icon-btn" onclick="closeModelModal()">Cancel</button>
+      <div style="flex:1"></div>
+      <div class="model-stats" id="modalSaveHint">Empty selection = allow all models</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ LOG INSPECTOR MODAL ══ -->
+<div id="logInspectorModal" class="modal-overlay" style="display:none" onclick="closeLogInspector()">
+  <div class="modal-box" style="max-width: 500px;" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">🔍 Request Details</div>
+        <div class="modal-subtitle" id="inspectTimestamp">—</div>
+      </div>
+      <button class="modal-close" onclick="closeLogInspector()">✕</button>
+    </div>
+    <div class="modal-body" style="gap: 12px; font-size: 13px;">
+      <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Method:</span>
+        <span id="inspectMethod" style="font-family: var(--font-mono); font-weight: bold; color: var(--accent);">—</span>
+        
+        <span style="color: var(--text-muted); font-weight: 600;">Path:</span>
+        <span id="inspectPath" style="font-family: var(--font-mono); word-break: break-all; color: var(--text);">—</span>
+
+        <span style="color: var(--text-muted); font-weight: 600;">Status:</span>
+        <span id="inspectStatus" style="font-family: var(--font-mono); font-weight: bold;">—</span>
+
+        <span style="color: var(--text-muted); font-weight: 600;">Latency:</span>
+        <span id="inspectLatency" style="font-family: var(--font-mono);">—</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Provider:</span>
+        <span id="inspectProvider" style="font-family: var(--font-mono); color: var(--text-muted);">—</span>
+
+        <span style="color: var(--text-muted); font-weight: 600;">Key Hint:</span>
+        <span id="inspectKeyHint" style="font-family: var(--font-mono); color: var(--text-muted);">—</span>
+      </div>
+
+      <div style="display: grid; grid-template-columns: 100px 1fr; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Client IP:</span>
+        <span id="inspectClientIp" style="font-family: var(--font-mono); color: var(--text);">—</span>
+
+        <span style="color: var(--text-muted); font-weight: 600;">User-Agent:</span>
+        <span id="inspectUserAgent" style="font-size: 11px; word-break: break-all; color: var(--text-muted);">—</span>
+
+        <span style="color: var(--text-muted); font-weight: 600;">Tokens:</span>
+        <span id="inspectTokens" style="font-family: var(--font-mono); color: var(--yellow); font-weight: 500;">—</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <span style="color: var(--text-muted); font-weight: 600;">Request Payload:</span>
+          <div style="display: flex; gap: 6px;">
+            <button class="clear-btn" style="padding: 2px 8px; font-size: 11px;" onclick="copyInspectPayload()">📋 Copy</button>
+            <button class="clear-btn" style="padding: 2px 8px; font-size: 11px;" onclick="toggleInspectPayloadExpand()">🔍 Expand</button>
+          </div>
+        </div>
+        <div id="inspectPayload" style="background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; color: var(--text-muted); transition: max-height 0.25s ease;">—</div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <span style="color: var(--text-muted); font-weight: 600;">Details / Error Messages:</span>
+        <div id="inspectError" style="background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; word-break: break-all; min-height: 50px;">—</div>
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content: flex-end;">
+      <button class="icon-btn" onclick="closeLogInspector()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// AUTH — all API calls go through authFetch()
+// ════════════════════════════════════════════════════════════
+let _authToken = sessionStorage.getItem('router_token') || '';
+
+function authFetch(url, opts = {}) {
+  if (!opts.headers) opts.headers = {};
+  if (_authToken) opts.headers['Authorization'] = 'Bearer ' + _authToken;
+  return fetch(url, opts);
+}
+
+function showLogin(msg) {
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay && overlay.style.display === 'flex') return;
+  
+  if (overlay) overlay.style.display = 'flex';
+  const errEl = document.getElementById('loginError');
+  if (errEl) errEl.textContent = msg || '';
+  const passInp = document.getElementById('loginPasswordInput');
+  if (passInp) passInp.value = '';
+  
+  const userInp = document.getElementById('loginUsernameInput');
+  if (userInp) setTimeout(() => userInp.focus(), 100);
+}
+
+async function doLogin() {
+  const username = document.getElementById('loginUsernameInput').value.trim();
+  const password = document.getElementById('loginPasswordInput').value;
+  if (!username || !password) {
+    document.getElementById('loginError').textContent = 'Please enter both username and password.';
+    return;
+  }
+  try {
+    const res = await fetch('/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      document.getElementById('loginError').textContent = data.error || 'Invalid credentials.';
+      return;
+    }
+    _authToken = data.token;
+    sessionStorage.setItem('router_token', _authToken);
+    document.getElementById('loginOverlay').style.display = 'none';
+    fetchStatus(); fetchLogs();
+  } catch (e) {
+    document.getElementById('loginError').textContent = 'Network error: ' + e.message;
+  }
+}
+
+const userInp = document.getElementById('loginUsernameInput');
+const passInp = document.getElementById('loginPasswordInput');
+if (userInp) {
+  userInp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') passInp.focus();
+  });
+}
+if (passInp) {
+  passInp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doLogin();
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// TABS
+// ════════════════════════════════════════════════════════════
+function switchTab(tab) {
+  // Exit fullscreen log if active when navigating away
+  if (_logFullscreen) toggleLogFullscreen();
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-' + tab).classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'settings') loadConfig();
+  if (tab === 'profile') loadConfig();
+  if (tab === 'models') {
+    loadConfig();
+    renderModelsTab();
+  }
+  if (tab === 'statistics') {
+    if (_lineChart) {
+      _lineChart.resize();
+      _lineChart.update();
+    }
+    if (_donutChart) {
+      _donutChart.resize();
+      _donutChart.update();
+    }
+    if (_mirrorChart) {
+      _mirrorChart.resize();
+      _mirrorChart.update();
+    }
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// MODELS TAB
+// ════════════════════════════════════════════════════════════
+function modelEntryName(e) { return typeof e === 'object' ? e.name : e; }
+
+function getSupportingProviders(modelName, keys) {
+  if (!keys) return [];
+  return keys.filter(k => {
+    if (k.enabled === false) return false;
+    const names = (k.allowedModels || []).map(modelEntryName);
+    if (names.length > 0) return names.includes(modelName);
+    if (k.cachedModels && k.cachedModels.includes(modelName)) return true;
+    if (!k.cachedModels || k.cachedModels.length === 0) return true;
+    return false;
+  }).map(k => k.urlHint ? `#${k.index + 1} — ${k.urlHint}` : `Provider #${k.index + 1}`);
+}
+
+function showProviderPopup(btn, modelName, providers) {
+  // Remove any existing popup
+  document.getElementById('_providerPopup')?.remove();
+
+  const popup = document.createElement('div');
+  popup.id = '_providerPopup';
+  popup.style.cssText = 'position:fixed;z-index:9999;background:var(--surface);border:1px solid var(--border2);border-radius:10px;box-shadow:0 8px 32px rgba(0,0,0,.5);padding:14px 16px;min-width:220px;max-width:340px';
+
+  const list = providers.length === 0
+    ? '<div style="color:var(--text-dim);font-size:12px;padding:4px 0">No enabled providers support this model</div>'
+    : providers.map(p => `<div style="font-size:12px;font-family:var(--font-mono);color:var(--text);padding:3px 0;border-bottom:1px solid var(--border)">${escHtml(p)}</div>`).join('');
+
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted)">Providers — <span style="color:var(--text)">${escHtml(modelName)}</span></div>
+      <button onclick="document.getElementById('_providerPopup').remove()" style="background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;line-height:1;padding:0 2px">✕</button>
+    </div>
+    <div style="max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:1px">${list}</div>
+    <div style="font-size:10px;color:var(--text-dim);margin-top:8px">${providers.length} provider${providers.length !== 1 ? 's' : ''}</div>`;
+
+  document.body.appendChild(popup);
+
+  // Position near button
+  const rect = btn.getBoundingClientRect();
+  const pw = popup.offsetWidth || 240;
+  let left = rect.left;
+  let top  = rect.bottom + 6;
+  if (left + pw > window.innerWidth - 12) left = window.innerWidth - pw - 12;
+  if (top + 320 > window.innerHeight) top = rect.top - 320;
+  popup.style.left = left + 'px';
+  popup.style.top  = top  + 'px';
+
+  // Close on outside click
+  setTimeout(() => {
+    document.addEventListener('click', function _close(e) {
+      if (!popup.contains(e.target) && e.target !== btn) {
+        popup.remove();
+        document.removeEventListener('click', _close);
+      }
+    });
+  }, 0);
+}
+
+async function modelTabFetchLogs() {
+  const from = document.getElementById('modelTabDateFrom')?.value || '';
+  const to   = document.getElementById('modelTabDateTo')?.value   || '';
+  const params = new URLSearchParams();
+  if (from) params.set('from', from);
+  if (to)   params.set('to',   to);
+  const banner = document.getElementById('modelTabDateBanner');
+  if (banner) banner.style.display = (from || to) ? '' : 'none';
+  try {
+    const r = await authFetch('/logs?' + params.toString());
+    if (r.status === 401) return;
+    _activeLogs = await r.json();
+  } catch { /* keep current logs */ }
+  renderModelsTab();
+}
+
+function modelTabClearDates() {
+  const f = document.getElementById('modelTabDateFrom');
+  const t = document.getElementById('modelTabDateTo');
+  if (f) f.value = '';
+  if (t) t.value = '';
+  const banner = document.getElementById('modelTabDateBanner');
+  if (banner) banner.style.display = 'none';
+  modelTabFetchLogs();
+}
+
+function renderModelsTab() {
+  const tbody = document.getElementById('modelTabBody');
+  if (!tbody) return;
+
+  const searchInput = document.getElementById('modelTabSearchInput');
+  const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+
+  const statusFilterEl = document.getElementById('modelTabStatusFilter');
+  const statusFilter = statusFilterEl ? statusFilterEl.value : 'all';
+
+  // Only include models from ENABLED providers
+  const enabledProviders = _poolKeys ? _poolKeys.filter(k => k.enabled !== false) : [];
+  const modelsSet = new Set();
+  enabledProviders.forEach(k => {
+    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
+    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+  });
+  _activeLogs.forEach(log => {
+    if (log.model) modelsSet.add(log.model);
+  });
+
+  const allModels = Array.from(modelsSet).sort();
+
+  const statsMap = {};
+  allModels.forEach(m => {
+    statsMap[m] = {
+      name: m,
+      requestCount: 0,
+      totalLatency: 0,
+      successCount: 0,
+      totalTokens: 0,
+      lastStatus: null,
+      lastStatusTime: 0
+    };
+  });
+
+  _activeLogs.forEach(log => {
+    const m = log.model;
+    if (!m) return;
+    if (!statsMap[m]) {
+      statsMap[m] = {
+        name: m,
+        requestCount: 0,
+        totalLatency: 0,
+        successCount: 0,
+        totalTokens: 0,
+        lastStatus: null,
+        lastStatusTime: 0
+      };
+    }
+
+    const stats = statsMap[m];
+    stats.requestCount++;
+    if (log.status && log.status >= 200 && log.status < 400 && log.responseTime) {
+      stats.totalLatency += log.responseTime;
+      stats.successCount++;
+    }
+    if (log.tokens) stats.totalTokens += log.tokens.total || 0;
+
+    const logTime = new Date(log.timestamp).getTime();
+    if (logTime > stats.lastStatusTime) {
+      stats.lastStatus = log.status;
+      stats.lastStatusTime = logTime;
+    }
+  });
+
+  let totalUniqueModels = allModels.length;
+  let usedModelsCount = 0;
+  let overallLatencyTotal = 0;
+  let overallSuccessCount = 0;
+  let mostActiveModel = '—';
+  let mostActiveCount = 0;
+
+  const modelRowsData = [];
+
+  allModels.forEach(m => {
+    const stats = statsMap[m];
+    const avgLatency = stats.successCount > 0 ? Math.round(stats.totalLatency / stats.successCount) : 0;
+    const supporting = getSupportingProviders(m, _poolKeys);
+
+    if (stats.requestCount > 0) {
+      usedModelsCount++;
+      if (stats.requestCount > mostActiveCount) {
+        mostActiveCount = stats.requestCount;
+        mostActiveModel = m;
+      }
+    }
+    if (stats.successCount > 0) {
+      overallLatencyTotal += stats.totalLatency;
+      overallSuccessCount += stats.successCount;
+    }
+
+    modelRowsData.push({
+      name: m,
+      supporting: supporting,
+      requestCount: stats.requestCount,
+      totalTokens: stats.totalTokens,
+      avgLatency: avgLatency,
+      lastStatus: stats.lastStatus
+    });
+  });
+
+  const overallAvgLatency = overallSuccessCount > 0 ? Math.round(overallLatencyTotal / overallSuccessCount) : 0;
+  
+  const totalModelsEl = document.getElementById('modelTabTotalModels');
+  if (totalModelsEl) totalModelsEl.textContent = totalUniqueModels;
+  
+  const usedModelsEl = document.getElementById('modelTabUsedModels');
+  if (usedModelsEl) usedModelsEl.textContent = usedModelsCount;
+  
+  const avgLatencyEl = document.getElementById('modelTabAvgLatency');
+  if (avgLatencyEl) avgLatencyEl.textContent = overallAvgLatency ? `${overallAvgLatency}ms` : '—';
+  
+  const activeModelEl = document.getElementById('modelTabActiveModel');
+  if (activeModelEl) {
+    activeModelEl.textContent = mostActiveModel;
+    activeModelEl.title = mostActiveModel;
+  }
+  
+  const activeCountEl = document.getElementById('modelTabActiveCount');
+  if (activeCountEl) activeCountEl.textContent = mostActiveCount > 0 ? `${mostActiveCount} request${mostActiveCount > 1 ? 's' : ''}` : 'No requests yet';
+
+  const filteredRows = modelRowsData.filter(row => {
+    // Only show enabled models (checked in manager); if allowed list empty = all enabled
+    if (_modelsTabAllowed.length > 0 && !_modelsTabAllowed.includes(row.name)) return false;
+
+    const matchesSearch = !searchQuery || row.name.toLowerCase().includes(searchQuery);
+    if (!matchesSearch) return false;
+
+    const aliveStatus = _modelsTabAliveState[row.name];
+    if (statusFilter === 'alive') {
+      return aliveStatus === 'alive';
+    } else if (statusFilter === 'dead') {
+      return aliveStatus === 'dead';
+    } else if (statusFilter === 'unchecked') {
+      return !aliveStatus;
+    }
+    // Default: hide only confirmed dead models (show alive + unchecked)
+    return aliveStatus !== 'dead';
+  });
+
+  // Sort
+  filteredRows.sort((a, b) => {
+    const dir = _modelTabSort.dir === 'asc' ? 1 : -1;
+    switch (_modelTabSort.col) {
+      case 'name': return dir * a.name.localeCompare(b.name);
+      case 'supporting': return dir * (a.supporting.length - b.supporting.length);
+      case 'requestCount': return dir * (a.requestCount - b.requestCount);
+      case 'totalTokens': return dir * (a.totalTokens - b.totalTokens);
+      case 'avgLatency': return dir * (a.avgLatency - b.avgLatency);
+      case 'lastStatus': return dir * ((a.lastStatus || 0) - (b.lastStatus || 0));
+      default: return 0;
+    }
+  });
+
+  // Update sort indicators in header
+  ['name','supporting','requestCount','totalTokens','avgLatency','lastStatus'].forEach(col => {
+    const el = document.getElementById('sort-' + col);
+    if (!el) return;
+    if (_modelTabSort.col === col) {
+      el.textContent = _modelTabSort.dir === 'asc' ? '↑' : '↓';
+      el.style.opacity = '1';
+    } else {
+      el.textContent = '⇅';
+      el.style.opacity = '.4';
+    }
+  });
+
+  if (filteredRows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No models found matching filters.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filteredRows.map(row => {
+    const sc = !row.lastStatus ? '' : row.lastStatus < 300 ? 's2' : row.lastStatus < 500 ? 's4' : 's5';
+    const scText = !row.lastStatus ? '—' : row.lastStatus;
+    const rtText = row.avgLatency > 0 ? `${row.avgLatency}ms` : '—';
+
+
+    const isChecked = _modelsTabAllowed.length === 0 || _modelsTabAllowed.includes(row.name);
+    const checkboxHtml = `<input type="checkbox" value="${escHtml(row.name)}" ${isChecked ? 'checked' : ''} onchange="toggleModelTabCheckbox(this)" style="cursor:pointer;" />`;
+
+    const aliveStatus = _modelsTabAliveState[row.name];
+    let aliveText = '';
+    let btnText = 'Check';
+    if (aliveStatus === 'alive') {
+      aliveText = '<span class="status-alive" style="margin-left: 6px;">Alive</span>';
+    } else if (aliveStatus === 'dead') {
+      aliveText = '<span class="status-dead" style="margin-left: 6px;">Dead</span>';
+    } else if (aliveStatus === 'checking') {
+      aliveText = '<span style="color:var(--text-muted); margin-left: 6px;">Testing...</span>';
+      btnText = '…';
+    }
+    const safeModelName = escHtml(row.name).replace(/'/g, "\\'");
+    const aliveColumn = `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
+        <button class="models-btn" style="padding: 2px 6px; font-size: 10px; margin-left: 0;" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)">${btnText}</button>
+        ${aliveText}
+      </div>
+    `;
+
+    const tokenText = row.totalTokens > 0 ? formatTokenCount(row.totalTokens) : '—';
+    const provCount = row.supporting.length;
+    const totalP    = _poolKeys ? _poolKeys.filter(k => k.enabled !== false).length : 0;
+    const provBtnColor = provCount === 0 ? 'var(--text-dim)' : provCount === totalP ? 'var(--green)' : 'var(--accent)';
+    const provBtnLabel = provCount === 0 ? `0 / ${totalP}` : `${provCount} / ${totalP}`;
+    const safeProviders = JSON.stringify(row.supporting).replace(/"/g, '&quot;');
+    const provBtn = `<button onclick="showProviderPopup(this,'${escHtml(row.name)}',${safeProviders})"
+      style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provBtnColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provBtnLabel}</button>`;
+    return `<tr data-model="${escHtml(row.name)}">
+      <td style="text-align:center">${checkboxHtml}</td>
+      <td style="font-family:var(--font-mono);color:var(--text);font-weight:500">${escHtml(row.name)}</td>
+      <td style="text-align:right;padding-right:16px">${row.requestCount || '—'}</td>
+      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'}">${tokenText}</td>
+      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.avgLatency > 0 ? 'var(--purple)' : 'var(--text-muted)'}">${rtText}</td>
+      <td style="text-align:center" class="${sc}">${scText}</td>
+      <td style="text-align:center">${provBtn}</td>
+      <td style="text-align:center">${aliveColumn}</td>
+    </tr>`;
+  }).join('');
+}
+
+function sortModelTab(col) {
+  if (_modelTabSort.col === col) {
+    _modelTabSort.dir = _modelTabSort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    _modelTabSort.col = col;
+    _modelTabSort.dir = 'asc';
+  }
+  renderModelsTab();
+}
+
+function toggleModelTabCheckbox(cb) {
+  const modelName = cb.value;
+  if (_modelsTabAllowed.length === 0) {
+    const modelsSet = new Set();
+    if (_poolKeys) {
+      _poolKeys.forEach(k => {
+        if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
+        if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
+      });
+    }
+    _activeLogs.forEach(log => {
+      if (log.model) modelsSet.add(log.model);
+    });
+    _modelsTabAllowed = Array.from(modelsSet);
+  }
+  
+  if (cb.checked) {
+    if (!_modelsTabAllowed.includes(modelName)) {
+      _modelsTabAllowed.push(modelName);
+    }
+  } else {
+    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+  }
+  
+  renderModelsTab();
+  renderModelsTabManagerList();
+}
+
+async function modelsTabCheckModelAliveFromTable(modelName, btn) {
+  let providerIndices = _modelsTabModelProviders[modelName] || [];
+  if (providerIndices.length === 0) {
+    const keys = _poolKeys || [];
+    keys.forEach(k => {
+      if ((k.allowedModels && k.allowedModels.map(modelEntryName).includes(modelName)) ||
+          (k.cachedModels && k.cachedModels.includes(modelName))) {
+        if (!providerIndices.includes(k.index)) {
+          providerIndices.push(k.index);
+        }
+      }
+    });
+  }
+  if (providerIndices.length === 0 && _providers) {
+    _providers.forEach((p, idx) => {
+      if ((p.allowedModels && p.allowedModels.includes(modelName)) || 
+          (p.cachedModels && p.cachedModels.includes(modelName))) {
+        if (!providerIndices.includes(idx)) {
+          providerIndices.push(idx);
+        }
+      }
+    });
+  }
+  
+  if (providerIndices.length === 0) {
+    _modelsTabAliveState[modelName] = 'dead';
+    renderModelsTab();
+    renderModelsTabManagerList();
+    return;
+  }
+  
+  _modelsTabAliveState[modelName] = 'checking';
+  renderModelsTab();
+  renderModelsTabManagerList();
+  
+  const pIdx = providerIndices[0];
+  const p = _providers[pIdx];
+  let alive = false;
+  try {
+    const res = await authFetch('/provider/test-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: p.url, key: p.key, model: modelName })
+    });
+    const data = await res.json();
+    alive = data.ok === true;
+  } catch (e) {
+    alive = false;
+  }
+  
+  _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
+  if (!alive) {
+    if (_modelsTabAllowed.length === 0) {
+      const modelsSet = new Set();
+      if (_poolKeys) {
+        _poolKeys.forEach(k => {
+          if (k.allowedModels) k.allowedModels.forEach(m => modelsSet.add(m));
+          if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
+        });
+      }
+      _activeLogs.forEach(log => {
+        if (log.model) modelsSet.add(log.model);
+      });
+      _modelsTabAllowed = Array.from(modelsSet);
+    }
+    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+  }
+  
+  renderModelsTab();
+  renderModelsTabManagerList();
+}
+
+async function checkAllModelsAlive() {
+  const tbody = document.getElementById('modelTabBody');
+  const rows = tbody.querySelectorAll('tr');
+  const modelsToTest = [];
+  rows.forEach(row => {
+    const m = row.getAttribute('data-model');
+    if (m) modelsToTest.push(m);
+  });
+  
+  if (modelsToTest.length === 0) return;
+  
+  const origBtn = document.querySelector('.card button[onclick="checkAllModelsAlive()"]');
+  if (origBtn) {
+    origBtn.disabled = true;
+    origBtn.textContent = 'Checking...';
+  }
+  
+  const batchSize = 5;
+  for (let i = 0; i < modelsToTest.length; i += batchSize) {
+    const batch = modelsToTest.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (modelName) => {
+      let providerIndices = _modelsTabModelProviders[modelName] || [];
+      if (providerIndices.length === 0) {
+        const keys = _poolKeys || [];
+        keys.forEach(k => {
+          if ((k.allowedModels && k.allowedModels.includes(modelName)) || 
+              (k.cachedModels && k.cachedModels.includes(modelName))) {
+            if (!providerIndices.includes(k.index)) {
+              providerIndices.push(k.index);
+            }
+          }
+        });
+      }
+      if (providerIndices.length === 0 && _providers) {
+        _providers.forEach((p, idx) => {
+          if ((p.allowedModels && p.allowedModels.map(modelEntryName).includes(modelName)) ||
+              (p.cachedModels && p.cachedModels.includes(modelName))) {
+            if (!providerIndices.includes(idx)) {
+              providerIndices.push(idx);
+            }
+          }
+        });
+      }
+      
+      if (providerIndices.length === 0) {
+        _modelsTabAliveState[modelName] = 'dead';
+        return;
+      }
+      
+      _modelsTabAliveState[modelName] = 'checking';
+      renderModelsTab();
+      renderModelsTabManagerList();
+      
+      const pIdx = providerIndices[0];
+      const p = _providers[pIdx];
+      let alive = false;
+      try {
+        const res = await authFetch('/provider/test-model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: p.url, key: p.key, model: modelName })
+        });
+        const data = await res.json();
+        alive = data.ok === true;
+      } catch (e) {
+        alive = false;
+      }
+      
+      _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
+      if (!alive) {
+        if (_modelsTabAllowed.length === 0) {
+          const modelsSet = new Set();
+          if (_poolKeys) {
+            _poolKeys.forEach(k => {
+              if (k.allowedModels) k.allowedModels.forEach(m => modelsSet.add(m));
+              if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
+            });
+          }
+          _activeLogs.forEach(log => {
+            if (log.model) modelsSet.add(log.model);
+          });
+          _modelsTabAllowed = Array.from(modelsSet);
+        }
+        _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+      }
+    }));
+    renderModelsTab();
+    renderModelsTabManagerList();
+  }
+  
+  if (origBtn) {
+    origBtn.disabled = false;
+    origBtn.textContent = 'Check All Alive';
+  }
+}
+
+// Existing clock function remains unchanged
+// ════════════════════════════════════════════════════════════
+function tick() { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US',{hour12:false}); }
+tick(); setInterval(tick, 1000);
+
+// ════════════════════════════════════════════════════════════
+// MONITOR helpers
+// ════════════════════════════════════════════════════════════
+function barColor(s) {
+  if (s === 'offline') return 'var(--red)';
+  return s==='exhausted'?'var(--red)':s==='near-limit'?'var(--yellow)':'var(--green)';
+}
+function pill(k) {
+  if(k.status==='offline')   return '<span class="pill pill-exhausted" style="background:rgba(239,68,68,.15);border:1px solid var(--red);animation:pulse 1.5s infinite">⚠️ Offline</span>';
+  if(k.isCurrent)            return '<span class="pill pill-active">● Active</span>';
+  if(k.status==='exhausted') return '<span class="pill pill-exhausted">Exhausted</span>';
+  if(k.status==='near-limit')return '<span class="pill pill-near">Near Limit</span>';
+  return '<span class="pill pill-healthy">Healthy</span>';
+}
+function renderKey(k) {
+  const pct = Math.min(100, Math.round(k.requestsLastMinute/k.maxPerMinute*100));
+  const cls = k.status==='offline'?'is-exhausted':k.isCurrent?'is-current':k.status==='near-limit'?'is-near':k.status==='exhausted'?'is-exhausted':'';
+  return `<div class="key-item ${cls}">
+    <div class="key-idx">#${k.index+1}</div>
+    <div class="key-info">
+      <div class="key-hint">${k.keyHint}</div>
+      <div class="key-url">${k.urlHint||''}</div>
+      <div class="key-bar-wrap"><div class="key-bar" style="width:${pct}%;background:${barColor(k.status)}"></div></div>
+    </div>
+    <div class="key-right">
+      <span class="key-count">${k.requestsLastMinute}/${k.maxPerMinute}</span>
+      ${pill(k)}
+    </div>
+  </div>`;
+}
+
+// ════════════════════════════════════════════════════════════
+// MONITOR: Status
+// ════════════════════════════════════════════════════════════
+let _currentToken = '';
+let _poolKeys = [];
+let _modelsTabAliveState = {};
+
+async function fetchStatus() {
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay && overlay.style.display === 'flex') return;
+  try {
+    const r = await authFetch('/status');
+    if (r.status === 401) { showLogin('Session expired — please re-enter your token.'); return; }
+    const d = await r.json();
+
+    if (d.proxyAuthToken) {
+      _currentToken = d.proxyAuthToken;
+      const patEl = document.getElementById('proxyAuthToken');
+      if (patEl) patEl.value = d.proxyAuthToken;
+    }
+
+    const banner = document.getElementById('setupBanner');
+    if (!d.configured) {
+      banner.classList.add('visible');
+      ['statReq','statHealthy','statNear','statExhausted'].forEach(id => document.getElementById(id).textContent='—');
+      document.getElementById('statCap').textContent = 'Not configured';
+      document.getElementById('statTotal').textContent = 'Add providers in Settings';
+      document.getElementById('keyGrid').innerHTML='<div class="empty-row" style="grid-column:1/-1">No providers loaded — open Settings.</div>';
+      return;
+    }
+
+    banner.classList.remove('visible');
+    const p = d.pool, keys = p.keys;
+    const healthy=keys.filter(k=>k.status==='healthy').length;
+    const near=keys.filter(k=>k.status==='near-limit').length;
+    const exhausted=keys.filter(k=>k.status==='exhausted').length;
+    const maxCap = keys.filter(k=>k.enabled!==false).reduce((s,k)=>s+k.maxPerMinute,0);
+    const pct=maxCap?Math.round(p.totalRequestsLastMinute/maxCap*100):0;
+    document.getElementById('statReq').textContent=p.totalRequestsLastMinute;
+    document.getElementById('statCap').textContent=p.effectiveCapacity+' capacity';
+    document.getElementById('statHealthy').textContent=healthy;
+    document.getElementById('statTotal').textContent=`${keys.length} total providers`;
+    document.getElementById('statNear').textContent=near;
+    document.getElementById('statExhausted').textContent=exhausted;
+    document.getElementById('capUsed').textContent=p.totalRequestsLastMinute;
+    document.getElementById('capTotal').textContent=maxCap;
+    document.getElementById('capPct').textContent=pct;
+    document.getElementById('bigBar').style.width=pct+'%';
+    document.getElementById('poolSummary').textContent=`${healthy} healthy · ${near} near · ${exhausted} exhausted`;
+    document.getElementById('keyGrid').innerHTML=keys.map(renderKey).join('');
+    _poolKeys = keys;
+    renderModelsTab();
+  } catch(e){console.warn('status fetch failed',e);}
+}
+
+function formatUptime(s){
+  if(s<60)return s+'s';
+  if(s<3600)return Math.floor(s/60)+'m '+s%60+'s';
+  return Math.floor(s/3600)+'h '+Math.floor((s%3600)/60)+'m';
+}
+
+
+
+// ════════════════════════════════════════════════════════════
+// MONITOR: Logs
+// ════════════════════════════════════════════════════════════
+function formatTokenCount(num) {
+  num = Math.round(num);
+  if (num >= 1000000) {
+    const val = num / 1000000;
+    return (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) + 'M';
+  }
+  if (num >= 1000) {
+    const val = num / 1000;
+    return (val % 1 === 0 ? val.toFixed(0) : val.toFixed(1)) + 'K';
+  }
+  return num.toString();
+}
+
+let _lineChart = null;
+let _donutChart = null;
+let _mirrorChart = null;
+
+function initCharts() {
+  const ctxLine = document.getElementById('analyticsLineChart');
+  const ctxDonut = document.getElementById('analyticsDonutChart');
+  if (!ctxLine || !ctxDonut) return;
+
+  // Create vertical linear gradient for request throughput chart fill
+  const ctx = ctxLine.getContext('2d');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 180);
+  gradient.addColorStop(0, 'rgba(59, 130, 246, 0.35)');
+  gradient.addColorStop(1, 'rgba(59, 130, 246, 0.00)');
+
+  // Chart.js dark theme defaults
+  Chart.defaults.color = '#6b7a99';
+  Chart.defaults.borderColor = '#1e2a3d';
+  Chart.defaults.font.family = "'Inter', sans-serif";
+
+  _lineChart = new Chart(ctxLine, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label: 'Requests / min',
+          data: [],
+          borderColor: '#3b82f6',
+          backgroundColor: gradient,
+          fill: true,
+          tension: 0.4,
+          yAxisID: 'yRPM',
+          borderWidth: 2,
+          pointRadius: 1,
+        },
+        {
+          label: 'Latency (ms)',
+          data: [],
+          borderColor: '#a855f7',
+          backgroundColor: 'transparent',
+          tension: 0.4,
+          yAxisID: 'yLatency',
+          borderWidth: 2,
+          pointRadius: 1,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top',
+          labels: { boxWidth: 12, font: { size: 11 } }
+        },
+        tooltip: {
+          backgroundColor: '#111620',
+          titleColor: '#e4eaf5',
+          bodyColor: '#e4eaf5',
+          borderColor: '#1e2a3d',
+          borderWidth: 1,
+          callbacks: {
+            label: function(context) {
+              let label = context.dataset.label || '';
+              if (label) {
+                label += ': ';
+              }
+              if (context.parsed.y !== null) {
+                label += Math.abs(context.parsed.y);
+              }
+              return label;
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { display: false },
+          ticks: { font: { size: 10 } }
+        },
+        yRPM: {
+          type: 'linear',
+          display: true,
+          position: 'left',
+          title: { display: true, text: 'Requests / min', font: { size: 10, weight: 'bold' } },
+          ticks: { font: { size: 10 } },
+          min: 0,
+        },
+        yLatency: {
+          type: 'linear',
+          display: true,
+          position: 'right',
+          title: { display: true, text: 'Latency (ms)', font: { size: 10, weight: 'bold' } },
+          ticks: { font: { size: 10 } },
+          grid: { drawOnChartArea: false },
+          min: 0,
+        }
+      }
+    }
+  });
+
+  _donutChart = new Chart(ctxDonut, {
+    type: 'doughnut',
+    data: {
+      labels: ['Success (2xx)', 'Client Error (4xx)', 'Server Error (5xx)'],
+      datasets: [{
+        data: [0, 0, 0],
+        backgroundColor: ['#22c55e', '#eab308', '#ef4444'],
+        borderWidth: 1,
+        borderColor: '#111620'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false }
+      },
+      cutout: '70%'
+    }
+  });
+
+  const ctxMirror = document.getElementById('analyticsMirrorChart');
+  if (ctxMirror) {
+    _mirrorChart = new Chart(ctxMirror, {
+      type: 'bar',
+      data: {
+        labels: [],
+        datasets: [
+          {
+            label: 'Request',
+            data: [],
+            borderColor: '#22c55e',
+            backgroundColor: 'rgba(34, 197, 150, 0.85)',
+            yAxisID: 'yRPM',
+            type: 'bar'
+          },
+          {
+            label: 'Token',
+            data: [],
+            borderColor: '#3b82f6',
+            backgroundColor: 'rgba(59, 130, 246, 0.85)',
+            yAxisID: 'yLatency',
+            type: 'bar'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: {
+          mode: 'index',
+          intersect: false,
+        },
+        plugins: {
+          legend: {
+            display: true,
+            position: 'top',
+            labels: { boxWidth: 12, font: { size: 11 } }
+          },
+          tooltip: {
+            backgroundColor: '#111620',
+            titleColor: '#e4eaf5',
+            bodyColor: '#e4eaf5',
+            borderColor: '#1e2a3d',
+            borderWidth: 1,
+            callbacks: {
+              label: function(context) {
+                let label = context.dataset.label || '';
+                if (label) label += ': ';
+                if (context.parsed.y !== null) {
+                  label += context.dataset.yAxisID === 'yLatency'
+                    ? fmtTokenVal(context.parsed.y)
+                    : Math.abs(context.parsed.y);
+                }
+                return label;
+              }
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: { font: { size: 10 } }
+          },
+          yRPM: {
+            type: 'linear',
+            display: true,
+            position: 'left',
+            title: { display: true, text: 'Request', font: { size: 10, weight: 'bold' } },
+            ticks: { font: { size: 10 } }
+          },
+          yLatency: {
+            type: 'linear',
+            display: true,
+            position: 'right',
+            title: { display: true, text: 'Token', font: { size: 10, weight: 'bold' } },
+            ticks: { font: { size: 10 } },
+            grid: { drawOnChartArea: false }
+          }
+        }
+      }
+    });
+  }
+
+  // Set default date input value to today in local timezone
+  const dateInput = document.getElementById('mirrorChartDate');
+  if (dateInput && !dateInput.value) {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+}
+
+let _currentChartView = 'rpm';
+
+function toggleChartView() {
+  const select = document.getElementById('chartViewSelect');
+  if (select) {
+    _currentChartView = select.value;
+    updateCharts(_activeLogs);
+  }
+}
+
+function updateCharts(logs) {
+  if (!_lineChart || !_donutChart) return;
+
+  // 1. Update Donut Chart
+  let success = 0, clientErr = 0, serverErr = 0;
+  logs.forEach(log => {
+    const s = log.status;
+    if (!s) serverErr++;
+    else if (s >= 200 && s < 400) success++;
+    else if (s >= 400 && s < 500) clientErr++;
+    else if (s >= 500) serverErr++;
+  });
+  
+  _donutChart.data.datasets[0].data = [success, clientErr, serverErr];
+  _donutChart.update('none');
+
+  // 2. Update Line Chart
+  const now = Date.now();
+  const tf = document.getElementById('trendTimeframeSelect') ? document.getElementById('trendTimeframeSelect').value : '5m';
+  
+  let duration = 5 * 60 * 1000;
+  let binSize = 10 * 1000; // 10-second bins
+  
+  if (tf === '30m') {
+    duration = 30 * 60 * 1000;
+    binSize = 60 * 1000; // 1-minute bins
+  } else if (tf === '1h') {
+    duration = 60 * 60 * 1000;
+    binSize = 2 * 60 * 1000; // 2-minute bins
+  } else if (tf === '24h') {
+    duration = 24 * 60 * 60 * 1000;
+    binSize = 30 * 60 * 1000; // 30-minute bins
+  }
+
+  const binCount = Math.floor(duration / binSize);
+  const scaleFactor = 60000 / binSize; // to convert to per-minute rates
+  
+  const rpmBins = new Array(binCount).fill(0);
+  const latencyBins = new Array(binCount).fill(0);
+  const latencyCounts = new Array(binCount).fill(0);
+  
+  const promptTokenBins = new Array(binCount).fill(0);
+  const completionTokenBins = new Array(binCount).fill(0);
+  const totalTokenBins = new Array(binCount).fill(0);
+
+  logs.forEach(log => {
+    const age = now - new Date(log.timestamp).getTime();
+    if (age >= 0 && age < duration) {
+      const binIdx = Math.floor((duration - age) / binSize);
+      if (binIdx >= 0 && binIdx < binCount) {
+        rpmBins[binIdx]++;
+        if (log.responseTime) {
+          latencyBins[binIdx] += log.responseTime;
+          latencyCounts[binIdx]++;
+        }
+        if (log.tokens) {
+          promptTokenBins[binIdx] += log.tokens.prompt || 0;
+          completionTokenBins[binIdx] += log.tokens.completion || 0;
+          totalTokenBins[binIdx] += log.tokens.total || 0;
+        }
+      }
+    }
+  });
+
+  const labels = [];
+  for (let i = 0; i < binCount; i++) {
+    const offsetSec = Math.round((binCount - i) * binSize / 1000);
+    if (tf === '24h') {
+      const h = Math.floor(offsetSec / 3600);
+      labels.push(`-${h}h`);
+    } else {
+      const m = Math.floor(offsetSec / 60);
+      const s = offsetSec % 60;
+      labels.push(m > 0 ? `-${m}m` : `-${s}s`);
+    }
+  }
+  _lineChart.data.labels = labels;
+
+  // Update title text in card
+  const tfText = tf === '5m' ? 'Last 5 mins' : tf === '30m' ? 'Last 30 mins' : tf === '1h' ? 'Last 1 hour' : 'Last 24 hours';
+  const titleEl = document.getElementById('trendChartTitle');
+  if (titleEl) titleEl.textContent = `📊 Analytics Trend (${tfText})`;
+
+  if (_currentChartView === 'rpm') {
+    const rpmData = rpmBins.map(c => c * scaleFactor);
+    const latencyData = latencyBins.map((total, idx) => {
+      const count = latencyCounts[idx];
+      return count > 0 ? Math.round(total / count) : 0;
+    });
+
+    _lineChart.data.datasets[0].label = 'Requests / min';
+    _lineChart.data.datasets[0].data = rpmData;
+    _lineChart.data.datasets[0].borderColor = '#3b82f6';
+    _lineChart.data.datasets[0].backgroundColor = 'rgba(59, 130, 246, 0.35)';
+    _lineChart.data.datasets[0].fill = true;
+    _lineChart.data.datasets[0].yAxisID = 'yRPM';
+    _lineChart.data.datasets[0].type = 'line';
+    _lineChart.data.datasets[0].hidden = false;
+
+    _lineChart.data.datasets[1].label = 'Latency (ms)';
+    _lineChart.data.datasets[1].data = latencyData;
+    _lineChart.data.datasets[1].borderColor = '#a855f7';
+    _lineChart.data.datasets[1].backgroundColor = 'transparent';
+    _lineChart.data.datasets[1].fill = false;
+    _lineChart.data.datasets[1].yAxisID = 'yLatency';
+    _lineChart.data.datasets[1].type = 'line';
+    _lineChart.data.datasets[1].hidden = false;
+    
+    if (_lineChart.data.datasets.length > 2) {
+      _lineChart.data.datasets = _lineChart.data.datasets.slice(0, 2);
+    }
+    
+    // reset scale properties
+    delete _lineChart.options.scales.yRPM.min;
+    delete _lineChart.options.scales.yRPM.max;
+    delete _lineChart.options.scales.yRPM.ticks.callback;
+    delete _lineChart.options.scales.yLatency.min;
+    delete _lineChart.options.scales.yLatency.max;
+    delete _lineChart.options.scales.yLatency.ticks.callback;
+
+    _lineChart.options.scales.yRPM.display = true;
+    _lineChart.options.scales.yRPM.title.text = 'Requests / min';
+    _lineChart.options.scales.yLatency.display = true;
+    _lineChart.options.scales.yLatency.title.text = 'Latency (ms)';
+  } else if (_currentChartView === 'tokens') {
+    const promptData = promptTokenBins.map(c => c * scaleFactor);
+    const completionData = completionTokenBins.map(c => c * scaleFactor);
+    const totalData = totalTokenBins.map(c => c * scaleFactor);
+
+    _lineChart.data.datasets[0].label = 'Total Tokens / min';
+    _lineChart.data.datasets[0].data = totalData;
+    _lineChart.data.datasets[0].borderColor = '#22c55e';
+    _lineChart.data.datasets[0].backgroundColor = 'transparent';
+    _lineChart.data.datasets[0].fill = false;
+    _lineChart.data.datasets[0].yAxisID = 'yRPM';
+    _lineChart.data.datasets[0].type = 'line';
+    
+    _lineChart.data.datasets[1].label = 'Prompt Tokens / min';
+    _lineChart.data.datasets[1].data = promptData;
+    _lineChart.data.datasets[1].borderColor = '#3b82f6';
+    _lineChart.data.datasets[1].backgroundColor = 'transparent';
+    _lineChart.data.datasets[1].fill = false;
+    _lineChart.data.datasets[1].yAxisID = 'yRPM';
+    _lineChart.data.datasets[1].type = 'line';
+
+    if (_lineChart.data.datasets.length < 3) {
+      _lineChart.data.datasets.push({
+        label: 'Completion Tokens / min',
+        data: completionData,
+        borderColor: '#eab308',
+        backgroundColor: 'transparent',
+        fill: false,
+        tension: 0.4,
+        yAxisID: 'yRPM',
+        borderWidth: 2,
+        pointRadius: 1,
+        type: 'line'
+      });
+    } else {
+      _lineChart.data.datasets[2].label = 'Completion Tokens / min';
+      _lineChart.data.datasets[2].data = completionData;
+      _lineChart.data.datasets[2].borderColor = '#eab308';
+      _lineChart.data.datasets[2].backgroundColor = 'transparent';
+      _lineChart.data.datasets[2].fill = false;
+      _lineChart.data.datasets[2].yAxisID = 'yRPM';
+      _lineChart.data.datasets[2].type = 'line';
+      _lineChart.data.datasets[2].hidden = false;
+    }
+
+    // reset scale properties
+    delete _lineChart.options.scales.yRPM.min;
+    delete _lineChart.options.scales.yRPM.max;
+    delete _lineChart.options.scales.yLatency.min;
+    delete _lineChart.options.scales.yLatency.max;
+    delete _lineChart.options.scales.yLatency.ticks.callback;
+
+    _lineChart.options.scales.yRPM.display = true;
+    _lineChart.options.scales.yRPM.title.text = 'Tokens / min';
+    _lineChart.options.scales.yRPM.ticks.callback = function(value) {
+      return formatTokenCount(value);
+    };
+    _lineChart.options.scales.yLatency.display = false;
+  }
+
+  _lineChart.update('none');
+  updateMirrorChart();
+}
+
+function onMirrorTimeframeChange() {
+  const select = document.getElementById('mirrorChartTimeframe');
+  const customWrapper = document.getElementById('mirrorCustomTimeRange');
+  if (select && customWrapper) {
+    if (select.value === 'custom') {
+      customWrapper.style.display = 'flex';
+    } else {
+      customWrapper.style.display = 'none';
+    }
+  }
+  updateMirrorChart();
+}
+
+function fmtTokenVal(v) {
+  const n = Math.round(Math.abs(v));
+  if (n >= 1_000_000) {
+    const m = n / 1_000_000;
+    return (Number.isInteger(m) ? m : m.toFixed(1)) + 'M';
+  }
+  if (n >= 50_000) return Math.round(n / 1_000) + 'K';
+  return n.toString();
+}
+
+function updateMirrorChart() {
+  if (!_mirrorChart) return;
+
+  const dateInput = document.getElementById('mirrorChartDate');
+  const tfSelect = document.getElementById('mirrorChartTimeframe');
+  
+  if (!dateInput || !tfSelect) return;
+
+  const selectedDate = dateInput.value;
+  const timeframe = tfSelect.value;
+
+  // Filter logs for the selected date
+  let filteredLogs = _activeLogs;
+  if (selectedDate) {
+    filteredLogs = _activeLogs.filter(log => {
+      const logDate = log.timestamp.split('T')[0];
+      return logDate === selectedDate;
+    });
+  }
+
+  // Filter by timeframe
+  if (timeframe === 'last1h') {
+    const minTime = Date.now() - 60 * 60 * 1000;
+    filteredLogs = filteredLogs.filter(log => new Date(log.timestamp).getTime() >= minTime);
+  } else if (timeframe === 'last6h') {
+    const minTime = Date.now() - 6 * 60 * 60 * 1000;
+    filteredLogs = filteredLogs.filter(log => new Date(log.timestamp).getTime() >= minTime);
+  } else if (timeframe === 'custom') {
+    const startInput = document.getElementById('mirrorChartStartTime');
+    const endInput = document.getElementById('mirrorChartEndTime');
+    if (startInput && endInput && startInput.value && endInput.value) {
+      const startParts = startInput.value.split(':');
+      const endParts = endInput.value.split(':');
+      
+      filteredLogs = filteredLogs.filter(log => {
+        const d = new Date(log.timestamp);
+        const h = d.getHours();
+        const m = d.getMinutes();
+        const logMinutes = h * 60 + m;
+        
+        const startMinutes = parseInt(startParts[0]) * 60 + parseInt(startParts[1]);
+        const endMinutes = parseInt(endParts[0]) * 60 + parseInt(endParts[1]);
+        return logMinutes >= startMinutes && logMinutes <= endMinutes;
+      });
+    }
+  }
+
+  // Aggregate into time bins for display (let's use 20 bins)
+  const binCount = 20;
+  const requestBins = new Array(binCount).fill(0);
+  const tokenBins = new Array(binCount).fill(0);
+  const labels = [];
+
+  let startTimeMs = 0;
+  let endTimeMs = 0;
+
+  if (filteredLogs.length > 0) {
+    const timestamps = filteredLogs.map(l => new Date(l.timestamp).getTime());
+    startTimeMs = Math.min(...timestamps);
+    endTimeMs = Math.max(...timestamps);
+  }
+
+  // Fallbacks if range is zero or no logs
+  if (startTimeMs === endTimeMs) {
+    if (selectedDate) {
+      startTimeMs = new Date(selectedDate + 'T00:00:00').getTime();
+      endTimeMs = new Date(selectedDate + 'T23:59:59').getTime();
+    } else {
+      endTimeMs = Date.now();
+      startTimeMs = endTimeMs - 24 * 60 * 60 * 1000;
+    }
+  }
+
+  const rangeMs = endTimeMs - startTimeMs;
+  // Guard against division by zero when all logs have the same timestamp
+  const binSizeMs = rangeMs > 0 ? rangeMs / binCount : 1;
+
+  for (let i = 0; i < binCount; i++) {
+    const binStart = startTimeMs + i * binSizeMs;
+    const dStart = new Date(binStart);
+    const timeStr = dStart.toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' });
+    labels.push(timeStr);
+  }
+
+  filteredLogs.forEach(log => {
+    const t = new Date(log.timestamp).getTime();
+    if (t >= startTimeMs && t <= endTimeMs) {
+      let binIdx = Math.floor((t - startTimeMs) / binSizeMs);
+      if (!Number.isFinite(binIdx) || binIdx >= binCount) binIdx = binCount - 1;
+      if (binIdx < 0) binIdx = 0;
+      requestBins[binIdx]++;
+      if (log.tokens) {
+        tokenBins[binIdx] += log.tokens.total || 0;
+      }
+    }
+  });
+
+  const requestData = requestBins;
+  const tokenData = tokenBins.map(v => -v);
+
+  _mirrorChart.data.labels = labels;
+  _mirrorChart.data.datasets[0].data = requestData;
+  _mirrorChart.data.datasets[1].data = tokenData;
+
+  const maxReq = Math.max(...requestData, 1);
+  const maxTok = Math.max(...tokenBins, 1);
+
+  _mirrorChart.options.scales.yRPM.min = -maxReq * 1.1;
+  _mirrorChart.options.scales.yRPM.max = maxReq * 1.1;
+  _mirrorChart.options.scales.yRPM.ticks.callback = function(value) {
+    return value >= 0 ? value : '';
+  };
+
+  _mirrorChart.options.scales.yLatency.min = -maxTok * 1.1;
+  _mirrorChart.options.scales.yLatency.max = maxTok * 1.1;
+  _mirrorChart.options.scales.yLatency.ticks.callback = function(value) {
+    return value <= 0 ? fmtTokenVal(value) : '';
+  };
+
+  _mirrorChart.update('none');
+}
+
+let lastLogCount=0;
+let _activeLogs = [];
+
+function updateAggregateStats() {
+  const clientsSet = new Set();
+  const clientIps = new Set();
+  let totalPrompt = 0;
+  let totalCompletion = 0;
+  let totalTokens = 0;
+
+  _activeLogs.forEach(log => {
+    if (log.ip) {
+      const clientKey = `${log.ip}::${log.userAgent || 'unknown'}`;
+      clientsSet.add(clientKey);
+      clientIps.add(log.ip);
+    }
+    
+    if (log.tokens) {
+      totalPrompt += log.tokens.prompt || 0;
+      totalCompletion += log.tokens.completion || 0;
+      totalTokens += log.tokens.total || 0;
+    }
+  });
+
+  const clientsCount = clientsSet.size;
+  const connectedEl = document.getElementById('statConnectedClients');
+  if (connectedEl) connectedEl.textContent = clientsCount;
+  
+  const listEl = document.getElementById('statClientsList');
+  if (listEl) {
+    if (clientIps.size > 0) {
+      const ipList = Array.from(clientIps).join(', ');
+      listEl.textContent = ipList;
+      listEl.title = `Active clients: ${ipList}`;
+    } else {
+      listEl.textContent = 'No active apps';
+      listEl.title = '';
+    }
+  }
+
+  const tokensEl = document.getElementById('statTokens');
+  if (tokensEl) tokensEl.textContent = formatTokenCount(totalTokens);
+  
+  const breakdownEl = document.getElementById('statTokensBreakdown');
+  if (breakdownEl) {
+    breakdownEl.textContent = `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}`;
+  }
+}
+
+async function fetchLogs(){
+  const overlay = document.getElementById('loginOverlay');
+  if (overlay && overlay.style.display === 'flex') return;
+  try{
+    const r=await authFetch('/logs');
+    if(r.status===401) return;
+    const logs=await r.json();
+    _activeLogs = logs;
+
+    updateCharts(logs);
+    renderModelsTab();
+    updateAggregateStats();
+    renderLogsTable();
+  }catch(e){console.warn('log fetch failed',e);}
+}
+
+function renderLogsTable() {
+  const tbody = document.getElementById('logBody');
+  if (!tbody) return;
+
+  const searchInput = document.getElementById('logSearchInput');
+  const statusFilterEl = document.getElementById('logStatusFilter');
+  const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
+  const statusFilter = statusFilterEl ? statusFilterEl.value : 'all';
+
+  const filtered = _activeLogs.filter(e => {
+    const matchQuery = !searchQuery || 
+      (e.path && e.path.toLowerCase().includes(searchQuery)) || 
+      (e.urlHint && e.urlHint.toLowerCase().includes(searchQuery)) ||
+      (e.keyHint && e.keyHint.toLowerCase().includes(searchQuery));
+
+    let matchStatus = true;
+    const status = e.status;
+    if (statusFilter === 'success') {
+      matchStatus = status >= 200 && status < 400;
+    } else if (statusFilter === 'clientError') {
+      matchStatus = status >= 400 && status < 500;
+    } else if (statusFilter === 'serverError') {
+      matchStatus = !status || status >= 500;
+    }
+
+    const matchAdvanced = matchesAdvancedFilters(e);
+
+    return matchQuery && matchStatus && matchAdvanced;
+  });
+
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No matching requests found.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.slice(0, 120).map((e, index) => {
+    const t = new Date(e.timestamp).toLocaleTimeString('en-US', { hour12: false });
+    const sc = !e.status ? 's5' : e.status < 300 ? 's2' : e.status < 500 ? 's4' : 's5';
+    const rt = e.responseTime ? `${e.responseTime}ms` : '—';
+    const logIdx = _activeLogs.indexOf(e);
+    
+    let tokensText = '—';
+    if (e.tokens && e.tokens.total) {
+      tokensText = `<span style="color:var(--yellow); font-weight:500;">${formatTokenCount(e.tokens.total)}</span> <span style="font-size:10px; color:var(--text-dim)">(${formatTokenCount(e.tokens.prompt)}/${formatTokenCount(e.tokens.completion)})</span>`;
+    }
+
+    return `<tr onclick="openLogInspector(${logIdx})" style="cursor: pointer;" title="Click to inspect request details">
+      <td>${t}</td>
+      <td class="m">${escHtml(e.method || '')}</td>
+      <td class="p">${escHtml(e.path || '')}</td>
+      <td style="color:var(--text-muted)">${escHtml(e.urlHint || '—')}</td>
+      <td>${escHtml(e.keyHint || '—')}</td>
+      <td style="white-space:nowrap">${tokensText}</td>
+      <td class="${sc}">${e.status || 'ERR'}</td>
+      <td>${rt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterLogs() {
+  renderLogsTable();
+}
+
+// ── Advanced Filters Logic ──
+let _advFiltersCounter = 0;
+let _advancedFilters = [];
+let _advancedFilterJoin = 'and';
+
+function toggleAdvancedFilterPanel() {
+  const panel = document.getElementById('advFilterPanel');
+  const btn = document.getElementById('advFilterToggleBtn');
+  if (!panel || !btn) return;
+  
+  if (panel.style.display === 'none') {
+    panel.style.display = 'flex';
+    btn.classList.add('accent');
+    if (_advancedFilters.length === 0) {
+      addAdvFilterRow();
+    }
+  } else {
+    panel.style.display = 'none';
+    btn.classList.remove('accent');
+  }
+}
+
+function addAdvFilterRow() {
+  const container = document.getElementById('advFilterRows');
+  if (!container) return;
+  
+  const id = _advFiltersCounter++;
+  const newFilter = { id, field: 'userAgent', operator: 'contains', value: '' };
+  _advancedFilters.push(newFilter);
+  
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = makeAdvFilterRowHtml(id);
+  container.appendChild(tempDiv.firstElementChild);
+  
+  filterLogs();
+}
+
+function makeAdvFilterRowHtml(idx) {
+  return `
+    <div class="adv-filter-row" id="adv-filter-${idx}">
+      <select class="form-select" style="padding: 6px 10px; font-size: 12px;" onchange="updateAdvFilter(${idx}, 'field', this.value)">
+        <option value="userAgent">User-Agent</option>
+        <option value="ip">IP Address</option>
+        <option value="date">Date (YYYY-MM-DD)</option>
+        <option value="time">Time (HH:MM:SS)</option>
+      </select>
+      <select class="form-select" style="padding: 6px 10px; font-size: 12px;" onchange="updateAdvFilter(${idx}, 'operator', this.value)">
+        <option value="contains">contains</option>
+        <option value="equals">equals</option>
+        <option value="not_contains">does not contain</option>
+      </select>
+      <input class="form-input" type="text" placeholder="Value..." style="padding: 6px 10px; font-size: 12px;" oninput="updateAdvFilter(${idx}, 'value', this.value)" />
+      <button class="del-btn" onclick="removeAdvFilterRow(${idx})" style="padding: 6px; font-size: 13px;" title="Remove condition">✕</button>
+    </div>
+  `;
+}
+
+function removeAdvFilterRow(id) {
+  const row = document.getElementById(`adv-filter-${id}`);
+  if (row) row.remove();
+  
+  _advancedFilters = _advancedFilters.filter(f => f.id !== id);
+  filterLogs();
+}
+
+function updateAdvFilter(id, field, value) {
+  const filter = _advancedFilters.find(f => f.id === id);
+  if (filter) {
+    filter[field] = value;
+    filterLogs();
+  }
+}
+
+function changeAdvJoin() {
+  const select = document.getElementById('advFilterJoin');
+  if (select) {
+    _advancedFilterJoin = select.value;
+    filterLogs();
+  }
+}
+
+function matchesAdvancedFilters(log) {
+  if (_advancedFilters.length === 0) return true;
+  
+  const results = _advancedFilters.map(filter => {
+    let logVal = '';
+    const field = filter.field;
+    const val = filter.value.toLowerCase().trim();
+    if (!val) return true;
+
+    if (field === 'userAgent') {
+      logVal = (log.userAgent || '').toLowerCase();
+    } else if (field === 'ip') {
+      logVal = (log.ip || '').toLowerCase();
+    } else if (field === 'date') {
+      if (log.timestamp) {
+        logVal = log.timestamp.split('T')[0].toLowerCase();
+      }
+    } else if (field === 'time') {
+      if (log.timestamp) {
+        logVal = log.timestamp.split('T')[1].split('.')[0].toLowerCase();
+      }
+    }
+    
+    if (filter.operator === 'contains') {
+      return logVal.includes(val);
+    } else if (filter.operator === 'equals') {
+      return logVal === val;
+    } else if (filter.operator === 'not_contains') {
+      return !logVal.includes(val);
+    }
+    return true;
+  });
+  
+  if (_advancedFilterJoin === 'or') {
+    return results.some(r => r === true);
+  } else {
+    return results.every(r => r === true);
+  }
+}
+
+// ── Fullscreen Request Log ──
+let _logFullscreen = false;
+
+function toggleLogFullscreen() {
+  const card = document.getElementById('logCard');
+  const btn = document.getElementById('fullscreenLogBtn');
+  if (!card || !btn) return;
+  
+  _logFullscreen = !_logFullscreen;
+  if (_logFullscreen) {
+    card.classList.add('fullscreen');
+    btn.textContent = '🚪 Exit';
+    btn.classList.add('accent');
+    document.body.style.overflow = 'hidden';
+  } else {
+    card.classList.remove('fullscreen');
+    btn.textContent = '🖥️ Fullscreen';
+    btn.classList.remove('accent');
+    document.body.style.overflow = '';
+  }
+}
+
+// ── Models Tab Provider Model Manager ──
+// _modelsTabModelProviders: { modelName: [providerIndex, ...] }
+let _modelsTabModelProviders = {};
+let _modelsTabCached = [];
+let _modelsTabAllowed = [];
+let _modelsTabModelLimits = {}; // { modelName: { rpm: number|null, tpm: number|null } }
+let _modelTabSort = { col: 'name', dir: 'asc' };
+
+// No-op stub: dropdown removed, nothing to populate
+function populateModelsTabProviderSelect() {
+  // Dropdown removed — this is now a no-op kept for backward compat with loadConfig call
+}
+
+function renderModelsTabManagerList() {
+  const listContainer = document.getElementById('modelsTabModelList');
+  if (!listContainer) return;
+  
+  if (_modelsTabCached.length === 0) {
+    listContainer.innerHTML = '<div class="model-empty">No models loaded. Click "Load Models from All Providers" to fetch.</div>';
+    document.getElementById('modelsTabSelCount').textContent = '0';
+    document.getElementById('modelsTabTotCount').textContent = '0';
+    return;
+  }
+  
+  const totalProviders = _providers.length;
+  
+  const searchQuery = document.getElementById('modelsTabManagerSearchInput') ? document.getElementById('modelsTabManagerSearchInput').value.toLowerCase().trim() : '';
+  const statusFilter = document.getElementById('modelsTabManagerStatusFilter') ? document.getElementById('modelsTabManagerStatusFilter').value : 'all';
+  
+  const filteredModels = _modelsTabCached.filter(m => {
+    const matchesSearch = !searchQuery || m.toLowerCase().includes(searchQuery);
+    if (!matchesSearch) return false;
+    
+    const aliveStatus = _modelsTabAliveState[m];
+    if (statusFilter === 'alive') {
+      return aliveStatus === 'alive';
+    } else if (statusFilter === 'dead') {
+      return aliveStatus === 'dead';
+    } else if (statusFilter === 'unchecked') {
+      return !aliveStatus;
+    }
+    return true;
+  });
+  
+  if (filteredModels.length === 0) {
+    listContainer.innerHTML = '<div class="model-empty">No models match filters.</div>';
+    return;
+  }
+
+  listContainer.innerHTML = filteredModels.map((m, idx) => {
+    const isChecked = _modelsTabAllowed.includes(m);
+    const providerIndices = _modelsTabModelProviders[m] || [];
+    let providerLabel = '';
+    if (providerIndices.length === 0) {
+      providerLabel = '<span style="color:var(--text-dim); font-size:10px;">unknown</span>';
+    } else if (providerIndices.length === 1) {
+      providerLabel = `<span style="color:var(--accent); font-size:10px; font-weight:600;">Provider #${providerIndices[0] + 1}</span>`;
+    } else if (providerIndices.length === totalProviders) {
+      providerLabel = `<span style="color:var(--green); font-size:10px; font-weight:600;">All ${totalProviders} providers</span>`;
+    } else {
+      providerLabel = `<span style="color:var(--purple); font-size:10px; font-weight:600;">${providerIndices.length} providers</span>`;
+    }
+    const safeModelName = escHtml(m).replace(/'/g, "\\'");
+    
+    const aliveStatus = _modelsTabAliveState[m];
+    let statusHtml = '';
+    if (aliveStatus === 'alive') {
+      statusHtml = '<span class="mgr-alive-status" style="font-size:10px; min-width:40px; text-align:center; color:var(--green)">✅ Alive</span>';
+    } else if (aliveStatus === 'dead') {
+      statusHtml = '<span class="mgr-alive-status" style="font-size:10px; min-width:40px; text-align:center; color:var(--red)">❌ Dead</span>';
+    } else if (aliveStatus === 'checking') {
+      statusHtml = '<span class="mgr-alive-status" style="font-size:10px; min-width:40px; text-align:center;">...</span>';
+    } else {
+      statusHtml = '<span class="mgr-alive-status" style="font-size:10px; min-width:40px; text-align:center;"></span>';
+    }
+    const btnText = aliveStatus === 'checking' ? '…' : 'Check';
+
+    const lim = _modelsTabModelLimits[m] || { rpm: null, tpm: null };
+    return `
+      <div class="model-item" data-model="${escHtml(m)}" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
+          <input type="checkbox" value="${escHtml(m)}" ${isChecked ? 'checked' : ''} onchange="toggleModelsTabCheckbox(this)" />
+          <span class="model-item-name" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(m)}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;">
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;color:var(--text-dim)">RPM</span>
+            <input type="number" min="1" placeholder="—" value="${lim.rpm || ''}"
+              style="width:52px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:10px;padding:2px 5px;outline:none;text-align:center"
+              oninput="modelsTabSetModelLimit('${safeModelName}','rpm',this.value)" />
+          </div>
+          <div style="display:flex;align-items:center;gap:3px">
+            <span style="font-size:10px;color:var(--text-dim)">TPM</span>
+            <input type="number" min="1" placeholder="—" value="${lim.tpm || ''}"
+              style="width:62px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text);font-size:10px;padding:2px 5px;outline:none;text-align:center"
+              oninput="modelsTabSetModelLimit('${safeModelName}','tpm',this.value)" />
+          </div>
+          ${statusHtml}
+          <button class="icon-btn mgr-alive-btn" style="font-size:10px;padding:2px 8px;white-space:nowrap" onclick="modelsTabCheckModelAlive('${safeModelName}',this)">${btnText}</button>
+          ${providerLabel}
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  document.getElementById('modelsTabSelCount').textContent = _modelsTabAllowed.length;
+  document.getElementById('modelsTabTotCount').textContent = _modelsTabCached.length;
+}
+
+function toggleModelsTabCheckbox(cb) {
+  const val = cb.value;
+  if (cb.checked) {
+    if (!_modelsTabAllowed.includes(val)) _modelsTabAllowed.push(val);
+  } else {
+    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== val);
+  }
+  document.getElementById('modelsTabSelCount').textContent = _modelsTabAllowed.length;
+  renderModelsTab();
+}
+
+function modelsTabSetModelLimit(modelName, field, value) {
+  if (!_modelsTabModelLimits[modelName]) _modelsTabModelLimits[modelName] = { rpm: null, tpm: null };
+  const v = parseInt(value, 10);
+  _modelsTabModelLimits[modelName][field] = (isFinite(v) && v > 0) ? v : null;
+}
+
+function modelsTabSelectAll() {
+  _modelsTabAllowed = [..._modelsTabCached];
+  renderModelsTabManagerList();
+  renderModelsTab();
+}
+
+// ── Selection management helpers ──
+function modelsTabDeselectAll() {
+  _modelsTabAllowed = [];
+  renderModelsTabManagerList();
+  renderModelsTab();
+}
+
+// ── Alive Check for Manager ──
+async function modelsTabCheckModelAlive(modelName, btn) {
+  const providerIndices = _modelsTabModelProviders[modelName] || [];
+  if (providerIndices.length === 0) {
+    _modelsTabAliveState[modelName] = 'dead';
+    renderModelsTabManagerList();
+    renderModelsTab();
+    return { alive: false };
+  }
+
+  _modelsTabAliveState[modelName] = 'checking';
+  renderModelsTabManagerList();
+  renderModelsTab();
+
+  const pIdx = providerIndices[0];
+  const p = _providers[pIdx];
+  let alive = false;
+
+  try {
+    const res = await authFetch('/provider/test-model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: p.url, key: p.key, model: modelName })
+    });
+    const data = await res.json();
+    alive = data.ok === true;
+  } catch (e) {
+    alive = false;
+  }
+
+  _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
+
+  if (!alive) {
+    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+  }
+
+  renderModelsTabManagerList();
+  renderModelsTab();
+
+  return { alive };
+}
+
+async function modelsTabCheckAllAlive() {
+  if (_modelsTabCached.length === 0) return;
+
+  const progressEl = document.getElementById('modelsTabAliveProgress');
+  const checkBtn = document.getElementById('modelsTabCheckAliveBtn');
+  const total = _modelsTabCached.length;
+  let checked = 0;
+  let deadCount = 0;
+
+  checkBtn.disabled = true;
+  checkBtn.textContent = '🩺 Checking...';
+  progressEl.style.display = 'inline';
+  progressEl.textContent = `0 / ${total}`;
+
+  const batchSize = 5;
+
+  for (let i = 0; i < _modelsTabCached.length; i += batchSize) {
+    const batch = _modelsTabCached.slice(i, i + batchSize);
+    const batchPromises = batch.map(async (modelName) => {
+      const result = await modelsTabCheckModelAlive(modelName, null);
+      checked++;
+      if (!result.alive) deadCount++;
+      progressEl.textContent = `${checked} / ${total} (${deadCount} dead)`;
+    });
+    await Promise.all(batchPromises);
+  }
+
+  checkBtn.disabled = false;
+  checkBtn.textContent = '🩺 Check Alive & Auto-Block Dead';
+  progressEl.textContent = `Done! ${deadCount} dead model${deadCount !== 1 ? 's' : ''} blocked.`;
+  setTimeout(() => { progressEl.style.display = 'none'; }, 5000);
+}
+
+async function modelsTabLoadFromApi() {
+  if (!_providers || _providers.length === 0) {
+    alert('No providers configured. Please add providers in Settings first.');
+    return;
+  }
+  
+  const validProviders = _providers.filter(p => p.url && p.key && p.enabled !== false);
+  if (validProviders.length === 0) {
+    alert('No enabled providers found. Enable at least one provider in Settings first.');
+    return;
+  }
+
+  const btn = document.getElementById('modelsTabLoadBtn');
+  const listContainer = document.getElementById('modelsTabModelList');
+  const container = document.getElementById('modelsTabManagerContainer');
+  const hint = document.getElementById('modelsTabManagerEmptyHint');
+  const origText = btn.textContent;
+
+  btn.disabled = true;
+  btn.textContent = 'Fetching from all providers...';
+  container.style.display = 'flex';
+  hint.style.display = 'none';
+  listContainer.innerHTML = `<div class="model-loading"><div class="spinner"></div>Fetching models from ${validProviders.length} enabled provider(s)...</div>`;
+
+  // Fetch models from all providers in parallel
+  const modelMap = {}; // modelName -> [providerIndex, ...]
+  const errors = [];
+
+  const fetchPromises = _providers.map(async (p, idx) => {
+    if (!p.url || !p.key) return; // skip unconfigured
+    if (p.enabled === false) return; // skip disabled providers
+    try {
+      const res = await authFetch('/provider/models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: p.url, key: p.key })
+      });
+      const data = await res.json();
+      if (data.ok && Array.isArray(data.models)) {
+        // If provider has allowedModels set, only include those models
+        const allowed = Array.isArray(p.allowedModels) && p.allowedModels.length > 0
+          ? new Set(p.allowedModels.map(modelEntryName))
+          : null;
+        data.models.forEach(m => {
+          if (allowed && !allowed.has(m)) return; // filtered out by provider's model allow-list
+          if (!modelMap[m]) modelMap[m] = [];
+          modelMap[m].push(idx);
+        });
+      } else {
+        errors.push(`Provider #${idx + 1}: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      errors.push(`Provider #${idx + 1}: ${err.message}`);
+    }
+  });
+  
+  await Promise.all(fetchPromises);
+  
+  // Merge results
+  const allModels = Object.keys(modelMap).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  
+  _modelsTabCached = allModels;
+  _modelsTabModelProviders = modelMap;
+
+  // Seed per-model limits from provider allowedModels objects
+  allModels.forEach(m => {
+    if (_modelsTabModelLimits[m]) return; // keep existing UI edits
+    for (const p of _providers) {
+      const entry = (p.allowedModels || []).find(e => modelEntryName(e) === m);
+      if (entry && typeof entry === 'object' && (entry.rpm || entry.tpm)) {
+        _modelsTabModelLimits[m] = { rpm: entry.rpm || null, tpm: entry.tpm || null };
+        break;
+      }
+    }
+    if (!_modelsTabModelLimits[m]) _modelsTabModelLimits[m] = { rpm: null, tpm: null };
+  });
+
+  // Keep only previously allowed models that still exist
+  _modelsTabAllowed = _modelsTabAllowed.filter(m => _modelsTabCached.includes(m));
+  // If nothing was previously allowed, default to all allowed
+  if (_modelsTabAllowed.length === 0 && _modelsTabCached.length > 0) {
+    _modelsTabAllowed = [..._modelsTabCached];
+  }
+  
+  renderModelsTabManagerList();
+  
+  // Show errors if any
+  if (errors.length > 0 && allModels.length > 0) {
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'font-size:11px; color:var(--yellow); margin-top:6px; padding:6px 10px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.2); border-radius:6px;';
+    errDiv.innerHTML = `⚠️ Some providers had errors:<br>${errors.map(e => `&bull; ${escHtml(e)}`).join('<br>')}`;
+    listContainer.appendChild(errDiv);
+  } else if (allModels.length === 0) {
+    listContainer.innerHTML = `<div class="model-empty" style="color:var(--red)">Failed to load models from any provider.<br>${errors.map(e => escHtml(e)).join('<br>')}</div>`;
+  }
+  
+  btn.disabled = false;
+  btn.textContent = origText;
+}
+
+async function modelsTabSaveSelection() {
+  const statusEl = document.getElementById('modelsTabSaveStatus');
+  const saveBtn = document.getElementById('modelsTabSaveBtn');
+  
+  saveBtn.disabled = true;
+  statusEl.textContent = 'Saving...';
+  statusEl.className = 'save-status';
+  statusEl.style.color = 'var(--accent)';
+  
+  let allOk = true;
+  const errors = [];
+  
+  // Save to each provider: set allowedModels to the global selection, 
+  // and cachedModels to only the models that provider actually supports
+  for (let i = 0; i < _providers.length; i++) {
+    const p = _providers[i];
+    if (!p.url || !p.key) continue;
+    
+    // Determine which cached models belong to this provider
+    const providerModels = _modelsTabCached.filter(m => {
+      const prov = _modelsTabModelProviders[m];
+      return prov && prov.includes(i);
+    });
+    
+    // Allowed models = intersection of global allowed and provider's models, with per-model limits
+    const providerAllowed = _modelsTabAllowed
+      .filter(m => providerModels.includes(m))
+      .map(m => {
+        const lim = _modelsTabModelLimits[m] || {};
+        return { name: m, rpm: lim.rpm || null, tpm: lim.tpm || null };
+      });
+
+    p.allowedModels = providerAllowed;
+    p.cachedModels = providerModels;
+
+    try {
+      const res = await authFetch('/provider/save-models', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          index: i,
+          allowedModels: providerAllowed,
+          cachedModels: providerModels
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        allOk = false;
+        errors.push(`Provider #${i + 1}: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      allOk = false;
+      errors.push(`Provider #${i + 1}: ${err.message}`);
+    }
+  }
+  
+  if (allOk) {
+    statusEl.textContent = '✅ Saved to all providers!';
+    statusEl.style.color = 'var(--green)';
+    setTimeout(() => {
+      statusEl.className = 'save-status hidden';
+      fetchStatus();
+    }, 1500);
+  } else {
+    statusEl.textContent = '⚠️ Some saves failed';
+    statusEl.style.color = 'var(--yellow)';
+    alert('Errors saving:\n' + errors.join('\n'));
+    setTimeout(() => { statusEl.className = 'save-status hidden'; }, 3000);
+  }
+  
+  saveBtn.disabled = false;
+}
+
+function openLogInspector(idx) {
+  const log = _activeLogs[idx];
+  if (!log) return;
+
+  document.getElementById('inspectTimestamp').textContent = new Date(log.timestamp).toLocaleString();
+  document.getElementById('inspectMethod').textContent = log.method || 'GET';
+  document.getElementById('inspectPath').textContent = log.path || '/';
+  
+  const statusEl = document.getElementById('inspectStatus');
+  const status = log.status || 'ERR';
+  statusEl.textContent = status;
+  statusEl.className = !log.status ? 'c-red' : log.status < 300 ? 'c-green' : log.status < 500 ? 'c-yellow' : 'c-red';
+
+  document.getElementById('inspectLatency').textContent = log.responseTime ? `${log.responseTime}ms` : '—';
+  document.getElementById('inspectProvider').textContent = log.urlHint || '—';
+  document.getElementById('inspectKeyHint').textContent = log.keyHint || '—';
+  
+  document.getElementById('inspectClientIp').textContent = log.ip || '—';
+  document.getElementById('inspectUserAgent').textContent = log.userAgent || '—';
+  
+  const tokensEl = document.getElementById('inspectTokens');
+  if (log.tokens) {
+    tokensEl.textContent = `${log.tokens.total} (Prompt: ${log.tokens.prompt} · Completion: ${log.tokens.completion})`;
+  } else {
+    tokensEl.textContent = '—';
+  }
+  
+  const payloadBox = document.getElementById('inspectPayload');
+  if (payloadBox) {
+    payloadBox.textContent = log.payload || 'No payload (GET/DELETE request).';
+  }
+
+  const errBox = document.getElementById('inspectError');
+  if (log.error) {
+    errBox.textContent = log.error;
+    errBox.style.color = 'var(--red)';
+  } else {
+    errBox.textContent = 'Request completed successfully without errors.';
+    errBox.style.color = 'var(--text-muted)';
+  }
+
+  document.getElementById('logInspectorModal').style.display = 'flex';
+}
+
+function closeLogInspector() {
+  document.getElementById('logInspectorModal').style.display = 'none';
+  const el = document.getElementById('inspectPayload');
+  if (el) el.style.maxHeight = '120px';
+  const btn = document.querySelector('button[onclick="toggleInspectPayloadExpand()"]');
+  if (btn) btn.textContent = '🔍 Expand';
+}
+
+function copyInspectPayload() {
+  const el = document.getElementById('inspectPayload');
+  if (!el || el.textContent === '—') return;
+  navigator.clipboard.writeText(el.textContent)
+    .then(() => alert('Copied request payload to clipboard!'))
+    .catch(() => alert('Failed to copy. Select and copy manually.'));
+}
+
+function toggleInspectPayloadExpand() {
+  const el = document.getElementById('inspectPayload');
+  const btn = document.querySelector('button[onclick="toggleInspectPayloadExpand()"]');
+  if (!el || !btn) return;
+  if (el.style.maxHeight === '500px') {
+    el.style.maxHeight = '120px';
+    btn.textContent = '🔍 Expand';
+  } else {
+    el.style.maxHeight = '500px';
+    btn.textContent = ' Collapse';
+  }
+}
+
+function clearLogs(){
+  document.getElementById('logBody').innerHTML='<tr><td colspan="7" class="empty-row">Log cleared.</td></tr>';
+  lastLogCount=-1;
+}
+
+function updateChartsTheme(theme) {
+  if (!_lineChart || !_donutChart) return;
+  
+  let textColor = '#6b7a99';
+  let gridColor = '#1e2a3d';
+  let tooltipBg = '#111620';
+  let tooltipText = '#e4eaf5';
+  let tooltipBorder = '#1e2a3d';
+  let donutBorder = '#111620';
+  
+  if (theme === 'light') {
+    textColor = '#475569';
+    gridColor = '#e2e8f0';
+    tooltipBg = '#ffffff';
+    tooltipText = '#0f172a';
+    tooltipBorder = '#cbd5e1';
+    donutBorder = '#ffffff';
+  } else if (theme === 'night') {
+    textColor = '#9ca3af';
+    gridColor = '#1a1a1a';
+    tooltipBg = '#0c0c0c';
+    tooltipText = '#f3f4f6';
+    tooltipBorder = '#262626';
+    donutBorder = '#000000';
+  }
+  
+  _lineChart.options.scales.x.ticks.color = textColor;
+  _lineChart.options.scales.x.grid.color = gridColor;
+  _lineChart.options.scales.yRPM.ticks.color = textColor;
+  _lineChart.options.scales.yRPM.grid.color = gridColor;
+  _lineChart.options.scales.yRPM.title.color = textColor;
+  
+  if (_lineChart.options.scales.yLatency) {
+    _lineChart.options.scales.yLatency.ticks.color = textColor;
+    _lineChart.options.scales.yLatency.grid.color = gridColor;
+    _lineChart.options.scales.yLatency.title.color = textColor;
+  }
+  
+  _lineChart.options.plugins.legend.labels.color = textColor;
+  _lineChart.options.plugins.tooltip.backgroundColor = tooltipBg;
+  _lineChart.options.plugins.tooltip.titleColor = tooltipText;
+  _lineChart.options.plugins.tooltip.bodyColor = tooltipText;
+  _lineChart.options.plugins.tooltip.borderColor = tooltipBorder;
+
+  if (_mirrorChart) {
+    _mirrorChart.options.scales.x.ticks.color = textColor;
+    _mirrorChart.options.scales.x.grid.color = gridColor;
+    _mirrorChart.options.scales.yRPM.ticks.color = textColor;
+    _mirrorChart.options.scales.yRPM.grid.color = gridColor;
+    _mirrorChart.options.scales.yRPM.title.color = textColor;
+    _mirrorChart.options.scales.yLatency.ticks.color = textColor;
+    _mirrorChart.options.scales.yLatency.grid.color = gridColor;
+    _mirrorChart.options.scales.yLatency.title.color = textColor;
+    _mirrorChart.options.plugins.legend.labels.color = textColor;
+    _mirrorChart.options.plugins.tooltip.backgroundColor = tooltipBg;
+    _mirrorChart.options.plugins.tooltip.titleColor = tooltipText;
+    _mirrorChart.options.plugins.tooltip.bodyColor = tooltipText;
+    _mirrorChart.options.plugins.tooltip.borderColor = tooltipBorder;
+    _mirrorChart.update('none');
+  }
+  
+  _donutChart.data.datasets[0].borderColor = donutBorder;
+  _donutChart.update('none');
+  _lineChart.update('none');
+}
+
+function changeTheme() {
+  const select = document.getElementById('themeSelect');
+  if (!select) return;
+  const theme = select.value;
+  
+  document.body.classList.remove('theme-light', 'theme-night');
+  if (theme === 'light') {
+    document.body.classList.add('theme-light');
+  } else if (theme === 'night') {
+    document.body.classList.add('theme-night');
+  }
+  
+  localStorage.setItem('router_theme', theme);
+  updateChartsTheme(theme);
+}
+
+// Startup Theme Setup
+const savedTheme = localStorage.getItem('router_theme') || 'dark';
+document.getElementById('themeSelect').value = savedTheme;
+document.body.classList.remove('theme-light', 'theme-night');
+if (savedTheme === 'light') {
+  document.body.classList.add('theme-light');
+} else if (savedTheme === 'night') {
+  document.body.classList.add('theme-night');
+}
+
+initCharts();
+updateChartsTheme(savedTheme);
+fetchStatus(); fetchLogs();
+setInterval(fetchStatus,2000);
+setInterval(fetchLogs,1500);
+
+// Populate Base URL fields on profile tab
+(function() {
+  const origin = window.location.origin;
+  const el = document.getElementById('profileBaseUrl');
+  if (el) el.value = origin + '/v1';
+  const elAnt = document.getElementById('profileAnthropicUrl');
+  if (elAnt) elAnt.value = origin;
+  const elGoo = document.getElementById('profileGoogleUrl');
+  if (elGoo) elGoo.value = origin + '/v1';
+})();
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS: Load
+// ════════════════════════════════════════════════════════════
+let _providers = [];
+
+async function loadConfig(){
+  try{
+    const r=await authFetch('/config/full');
+    if(r.status===401) return;
+    const cfg=await r.json();
+    document.getElementById('proxyAuthToken').value=cfg.proxyAuthToken||'';
+    const antTok = document.getElementById('anthropicProxyToken');
+    const gooTok = document.getElementById('googleProxyToken');
+    if (antTok) antTok.value = cfg.anthropicProxyToken || '';
+    if (gooTok) gooTok.value = cfg.googleProxyToken    || '';
+    document.getElementById('rotationThreshold').value=cfg.rotationThreshold||32;
+    document.getElementById('maxPerMinute').value=cfg.maxPerMinute||35;
+    document.getElementById('keyInjectMode').value=cfg.keyInjectMode||'bearer';
+    document.getElementById('keyInjectParam').value=cfg.keyInjectParam||'api_key';
+    document.getElementById('keyInjectHeader').value=cfg.keyInjectHeader||'X-API-Key';
+    const prevProviderCount = _providers.length;
+    _providers = cfg.providers||[];
+    // If provider list changed, clear stale model cache to force a fresh load
+    if (_providers.length !== prevProviderCount) {
+      _modelsTabCached = [];
+      _modelsTabModelProviders = {};
+    }
+    renderProviderTable(_providers);
+    updateCapBadge();
+    onModeChange();
+    updateAuthExample(cfg.proxyAuthToken||'');
+    // Load API modes
+    const modes = cfg.apiModes || {};
+    const elAnt = document.getElementById('apiModeAnthropic');
+    const elGoo = document.getElementById('apiModeGoogle');
+    if (elAnt) elAnt.checked = !!modes.anthropic;
+    if (elGoo) elGoo.checked = !!modes.google;
+    if (document.getElementById('updateUsername')) {
+      const username = cfg.dashboardUsername || 'admin';
+      document.getElementById('updateUsername').value = username;
+      const pDisplay = document.getElementById('profileUsernameDisplay');
+      if (pDisplay) pDisplay.textContent = username;
+    }
+    populateModelsTabProviderSelect();
+  }catch(e){console.warn('config load failed',e);}
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS: Provider Table
+// ════════════════════════════════════════════════════════════
+let _allKeysVisible = false;
+
+function renderProviderTable(providers){
+  const tbody=document.getElementById('providerBody');
+  tbody.innerHTML='';
+  providers.forEach((p,i)=>tbody.appendChild(makeRow(i,p)));
+  updateProviderCount();
+  updateCapBadge();
+}
+
+function modelLabel(p) {
+  const allowed = (p.allowedModels || []).map(modelEntryName);
+  const cached = p.cachedModels || [];
+  if (allowed.length === 0) {
+    return cached.length > 0 ? `All (${cached.length})` : '🎯 Models';
+  }
+  return `🎯 ${allowed.length} models`;
+}
+
+function makeRow(idx, p){
+  const tr=document.createElement('tr');
+  const num = idx + 1;
+  const enabled = p.enabled !== false;
+  if (!enabled) tr.classList.add('provider-disabled');
+  tr.innerHTML=`
+    <td class="td-num">${num}</td>
+    <td class="td-url"><input class="tbl-input" type="text" placeholder="https://api.example.com/v1" value="${escHtml(p.url||'')}" oninput="updateProviderField(${idx}, 'url', this.value)" /></td>
+    <td class="td-key"><input class="tbl-input key-input" type="${_allKeysVisible?'text':'password'}" placeholder="your-api-key" value="${escHtml(p.key||'')}" oninput="updateProviderField(${idx}, 'key', this.value)" /></td>
+    <td class="td-type">
+      <select class="type-select type-${p.type||'openai'}" onchange="updateProviderField(${idx},'type',this.value);this.className='type-select type-'+this.value">
+        <option value="openai"    ${(!p.type||p.type==='openai')?'selected':''}>OpenAI</option>
+        <option value="anthropic" ${p.type==='anthropic'?'selected':''}>Anthropic</option>
+        <option value="google"    ${p.type==='google'?'selected':''}>Google</option>
+      </select>
+    </td>
+    <td class="td-rpm"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.rpm||''}" oninput="updateProviderField(${idx}, 'rpm', this.value?parseInt(this.value)||null:null)" /></td>
+    <td class="td-tpm"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.tpm||''}" oninput="updateProviderField(${idx}, 'tpm', this.value?parseInt(this.value)||null:null)" /></td>
+    <td class="td-models">
+      <button class="models-btn ${p.allowedModels && p.allowedModels.length > 0 ? 'has-filter' : ''}" onclick="openModelModal(${idx})">
+        ${modelLabel(p)}
+      </button>
+    </td>
+    <td class="td-en"><button class="toggle-btn" onclick="toggleProviderEnabled(${idx})" title="${enabled?'Disable provider':'Enable provider'}">${enabled?'🟢':'⚫'}</button></td>
+    <td class="td-del"><button class="del-btn" onclick="delRow(${idx})" title="Remove">✕</button></td>`;
+  return tr;
+}
+
+function updateProviderField(idx, field, value) {
+  if (_providers[idx]) {
+    _providers[idx][field] = value;
+    if (field === 'key') updateCapBadge();
+    if (field === 'rpm') updateCapBadge();
+    if (field === 'url') updateProviderCount();
+  }
+}
+
+function toggleProviderEnabled(idx){
+  if (_providers[idx]) {
+    _providers[idx].enabled = _providers[idx].enabled === false ? true : false;
+    renderProviderTable(_providers);
+  }
+}
+
+function addProviderRow(url='', key='', allowedModels=[], cachedModels=[], rpm=null, tpm=null, enabled=true, type='openai'){
+  _providers.push({ url, key, allowedModels, cachedModels, rpm, tpm, enabled, type });
+  renderProviderTable(_providers);
+  // Focus the key field of the new row
+  const rows = document.querySelectorAll('#providerBody tr');
+  if (rows.length) {
+    const inputs = rows[rows.length - 1].querySelectorAll('input');
+    if (inputs.length > 1) inputs[1].focus();
+  }
+}
+
+function delRow(idx){
+  _providers.splice(idx, 1);
+  renderProviderTable(_providers);
+}
+
+// Scrape not used anymore, but kept for compatibility just in case
+function getProviders(){
+  return _providers.map(p => ({
+    url: (p.url || '').trim().replace(/\/$/,''),
+    key: (p.key || '').trim(),
+    allowedModels: p.allowedModels || [],
+    cachedModels: p.cachedModels || [],
+    rpm: p.rpm ? parseInt(p.rpm, 10) || null : null,
+    tpm: p.tpm ? parseInt(p.tpm, 10) || null : null,
+    enabled: p.enabled !== false,
+    type: p.type || 'openai',
+  })).filter(p => p.url && p.key);
+}
+
+function updateProviderCount(){
+  const n=_providers.length;
+  document.getElementById('providerCount').textContent=n+(n===1?' provider':' providers');
+  updateCapBadge();
+}
+
+function updateCapBadge(){
+  const globalMax = parseInt(document.getElementById('maxPerMinute').value) || 35;
+  const enabled = _providers.filter(p => p.enabled !== false);
+  const n = enabled.length;
+  if (!n) {
+    document.getElementById('capBadge').textContent = '— req/min';
+    document.getElementById('capExplain').textContent = 'Add providers above.';
+    return;
+  }
+  const cap = enabled.reduce((sum, p) => {
+    const rpm = parseInt(p.rpm, 10);
+    return sum + (isFinite(rpm) && rpm > 0 ? rpm : globalMax);
+  }, 0);
+  const customCount = enabled.filter(p => { const r=parseInt(p.rpm,10); return isFinite(r)&&r>0; }).length;
+  const explain = customCount > 0
+    ? `${n} enabled providers — ${customCount} with custom RPM, rest use global ${globalMax} = ${cap} req/min`
+    : `${n} providers × ${globalMax} req/min = ${cap} req/min`;
+  document.getElementById('capBadge').textContent = cap + ' req/min';
+  document.getElementById('capExplain').textContent = explain;
+}
+
+function updateApiMode(mode, val) {
+  authFetch('/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ apiModes: {
+      openai: true,
+      anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
+      google:    document.getElementById('apiModeGoogle')?.checked    || false,
+      [mode]: val,
+    }})
+  }).catch(() => {});
+}
+
+function onModeChange(){
+  const mode=document.getElementById('keyInjectMode').value;
+  document.getElementById('paramGroup').style.opacity=mode==='query'?'1':'0.35';
+  document.getElementById('headerGroup').style.opacity=mode==='header'?'1':'0.35';
+}
+
+function updateAuthExample(token){
+  const el = document.getElementById('authHeaderExample');
+  if (el) {
+    el.textContent = token?`Authorization: Bearer ${token}`:'Authorization: Bearer <your-proxy-token>';
+  }
+}
+
+function toggleAllKeys(){
+  _allKeysVisible=!_allKeysVisible;
+  document.querySelectorAll('#providerBody .key-input').forEach(inp=>{
+    inp.type=_allKeysVisible?'text':'password';
+  });
+  document.getElementById('showAllBtn').textContent=_allKeysVisible?'Hide Keys':'Show Keys';
+}
+
+function duplicateLastUrl(){
+  if(!_providers.length){addProviderRow();return;}
+  const lastUrl=_providers[_providers.length-1].url;
+  addProviderRow(lastUrl,'');
+}
+
+function clearAllProviders(){
+  if(!confirm('Remove all providers?'))return;
+  _providers = [];
+  renderProviderTable(_providers);
+}
+
+function escHtml(s){return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+// ── Import ──
+function importProviders(){
+  document.getElementById('importHint').style.display='block';
+}
+function hideImport(){
+  document.getElementById('importHint').style.display='none';
+  document.getElementById('importArea').value='';
+}
+function doImport(){
+  const lines=document.getElementById('importArea').value.split('\n').map(l=>l.trim()).filter(Boolean);
+  let added=0;
+  lines.forEach(line=>{
+    const parts=line.split(/[\t,]/).map(s=>s.trim());
+    if(parts.length>=2){
+      _providers.push({ url: parts[0], key: parts[1], allowedModels: [], cachedModels: [] });
+      added++;
+    } else if(parts.length===1 && parts[0]){
+      _providers.push({ url: '', key: parts[0], allowedModels: [], cachedModels: [] });
+      added++;
+    }
+  });
+  hideImport();
+  if(added) {
+    renderProviderTable(_providers);
+    showSaveStatus(`Imported ${added} providers`,false,'success');
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS: Model Management Modal
+// ════════════════════════════════════════════════════════════
+let _activeProviderIdx = null;
+let _modalCachedModels = [];
+let _modalAllowedModels = [];
+let _isTestingModels = false;
+
+function populateCopySourceSelect() {
+  const select = document.getElementById('modelCopySourceSelect');
+  if (!select) return;
+  select.innerHTML = '<option value="">-- Select Provider --</option>';
+  _providers.forEach((p, i) => {
+    if (i === _activeProviderIdx) return;
+    const name = `Provider #${i + 1} (${p.url || 'No URL'})`;
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = name;
+    select.appendChild(opt);
+  });
+}
+
+function copyModelsFromProvider(sourceIdxVal) {
+  if (sourceIdxVal === '') return;
+  const sourceIdx = parseInt(sourceIdxVal, 10);
+  const src = _providers[sourceIdx];
+  if (!src) return;
+  
+  _modalCachedModels = [...(src.cachedModels || [])];
+  _modalAllowedModels = [...(src.allowedModels || [])];
+  
+  renderModelList();
+  
+  // Reset select value
+  document.getElementById('modelCopySourceSelect').value = '';
+}
+
+function copyModelsFromFirstToOthers() {
+  if (_providers.length < 2) {
+    alert('You need at least 2 providers configured to copy models.');
+    return;
+  }
+  const first = _providers[0];
+  if (!first) return;
+  const allowed = [...(first.allowedModels || [])];
+  const cached = [...(first.cachedModels || [])];
+  
+  if (allowed.length === 0 && cached.length === 0) {
+    if (!confirm('Provider #1 has no models configured (allows all models). Copying this will clear filters on all other providers. Proceed?')) {
+      return;
+    }
+  } else {
+    if (!confirm(`Copy model filters (${allowed.length} models) from Provider #1 to all other providers?`)) {
+      return;
+    }
+  }
+  
+  for (let i = 1; i < _providers.length; i++) {
+    _providers[i].allowedModels = [...allowed];
+    _providers[i].cachedModels = [...cached];
+  }
+  
+  renderProviderTable(_providers);
+  showSaveStatus('Copied Provider #1 models to other providers', false, 'success');
+}
+
+function openModelModal(idx) {
+  _activeProviderIdx = idx;
+  const p = _providers[idx];
+  if (!p) return;
+
+  document.getElementById('modalProviderUrl').textContent = p.url || '(No URL set)';
+  document.getElementById('modelSearch').value = '';
+  document.getElementById('testProgress').textContent = '';
+
+  _modalCachedModels = p.cachedModels || [];
+  _modalAllowedModels = [...(p.allowedModels || [])];
+
+  renderModelList();
+  populateCopySourceSelect();
+  
+  document.getElementById('modelModal').style.display = 'flex';
+}
+
+function closeModelModal() {
+  _isTestingModels = false;
+  document.getElementById('modelModal').style.display = 'none';
+  _activeProviderIdx = null;
+}
+
+function onModalOverlayClick(event) {
+  if (event.target.id === 'modelModal') {
+    closeModelModal();
+  }
+}
+
+async function loadModels() {
+  const p = _providers[_activeProviderIdx];
+  if (!p) return;
+  if (!p.url || !p.key) {
+    alert('Please enter both the API Base URL and API Key for this provider first.');
+    return;
+  }
+
+  const btn = document.getElementById('loadModelsBtn');
+  const listContainer = document.getElementById('modelList');
+  const origText = btn.textContent;
+  
+  btn.disabled = true;
+  btn.textContent = 'Fetching...';
+  listContainer.innerHTML = '<div class="model-loading"><div class="spinner"></div>Fetching models from provider API...</div>';
+
+  try {
+    const res = await authFetch('/provider/models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: p.url, key: p.key })
+    });
+    const data = await res.json();
+    if (data.ok && Array.isArray(data.models)) {
+      _modalCachedModels = data.models;
+      _modalAllowedModels = _modalAllowedModels.filter(m => _modalCachedModels.includes(m));
+      renderModelList();
+    } else {
+      listContainer.innerHTML = `<div class="model-empty" style="color:var(--red)">Error: ${data.error || 'Failed to fetch models'}</div>`;
+    }
+  } catch (err) {
+    listContainer.innerHTML = `<div class="model-empty" style="color:var(--red)">Network Error: ${err.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+function modelDomId(m) {
+  return 'model-' + (m || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function renderModelList() {
+  const listContainer = document.getElementById('modelList');
+  const query = document.getElementById('modelSearch').value.toLowerCase().trim();
+  
+  if (_modalCachedModels.length === 0) {
+    listContainer.innerHTML = '<div class="model-empty">No models loaded. Click "Load Models from API" to fetch.</div>';
+    updateModelStats(0, 0);
+    return;
+  }
+
+  const filtered = _modalCachedModels.filter(m => m.toLowerCase().includes(query));
+  
+  if (filtered.length === 0) {
+    listContainer.innerHTML = '<div class="model-empty">No models match your search.</div>';
+    updateModelStats(0, _modalCachedModels.length);
+    return;
+  }
+
+  listContainer.innerHTML = filtered.map(m => {
+    const isChecked = _modalAllowedModels.includes(m);
+    return `
+      <label class="model-item">
+        <input type="checkbox" value="${escHtml(m)}" ${isChecked ? 'checked' : ''} onchange="toggleModelCheckbox(this)" />
+        <span class="model-item-name">${escHtml(m)}</span>
+        <span class="model-item-status" id="status-${modelDomId(m)}"></span>
+      </label>
+    `;
+  }).join('');
+
+  updateModelStats(filtered.length, _modalCachedModels.length);
+}
+
+function toggleModelCheckbox(cb) {
+  const val = cb.value;
+  if (cb.checked) {
+    if (!_modalAllowedModels.includes(val)) {
+      _modalAllowedModels.push(val);
+    }
+  } else {
+    _modalAllowedModels = _modalAllowedModels.filter(m => m !== val);
+  }
+  updateModelStats(
+    document.querySelectorAll('#modelList .model-item').length,
+    _modalCachedModels.length
+  );
+}
+
+function updateModelStats(shownCount, totalCount) {
+  document.getElementById('modelShowCount').textContent = shownCount;
+  document.getElementById('modelTotalCount').textContent = totalCount;
+  document.getElementById('modelSelectedCount').textContent = _modalAllowedModels.length;
+}
+
+function filterModels() {
+  renderModelList();
+}
+
+function selectAllModels() {
+  const query = document.getElementById('modelSearch').value.toLowerCase().trim();
+  const visible = _modalCachedModels.filter(m => m.toLowerCase().includes(query));
+  
+  visible.forEach(m => {
+    if (!_modalAllowedModels.includes(m)) {
+      _modalAllowedModels.push(m);
+    }
+  });
+  renderModelList();
+}
+
+function deselectAllModels() {
+  const query = document.getElementById('modelSearch').value.toLowerCase().trim();
+  const visible = _modalCachedModels.filter(m => m.toLowerCase().includes(query));
+  
+  _modalAllowedModels = _modalAllowedModels.filter(m => !visible.includes(m));
+  renderModelList();
+}
+
+async function testSelectedModels() {
+  if (_isTestingModels) return;
+  const p = _providers[_activeProviderIdx];
+  if (!p) return;
+  if (!p.url || !p.key) {
+    alert('Please enter both the API Base URL and API Key for this provider first.');
+    return;
+  }
+
+  const selected = [..._modalAllowedModels];
+  if (selected.length === 0) {
+    alert('Please select/check at least one model to test.');
+    return;
+  }
+
+  _isTestingModels = true;
+  const btn = document.getElementById('testModelsBtn');
+  const autoExclude = document.getElementById('autoExcludeDead').checked;
+  const progressEl = document.getElementById('testProgress');
+  
+  btn.disabled = true;
+  btn.textContent = 'Testing...';
+
+  // Clear previous test statuses
+  selected.forEach(m => {
+    const el = document.getElementById(`status-${modelDomId(m)}`);
+    if (el) {
+      el.textContent = '';
+      el.className = 'model-item-status';
+    }
+  });
+
+  let completed = 0;
+  progressEl.textContent = `0/${selected.length}`;
+
+  const batchSize = 3;
+  for (let i = 0; i < selected.length; i += batchSize) {
+    if (!_isTestingModels) break;
+
+    const batch = selected.slice(i, i + batchSize);
+    
+    batch.forEach(m => {
+      const el = document.getElementById(`status-${modelDomId(m)}`);
+      if (el) {
+        el.textContent = 'Testing...';
+        el.className = 'model-item-status status-testing';
+      }
+    });
+
+    const results = await Promise.all(batch.map(async m => {
+      try {
+        const res = await authFetch('/provider/test-model', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: p.url, key: p.key, model: m })
+        });
+        const data = await res.json();
+        return { model: m, ...data };
+      } catch (err) {
+        return { model: m, ok: false, error: err.message };
+      }
+    }));
+
+    results.forEach(res => {
+      const el = document.getElementById(`status-${modelDomId(res.model)}`);
+      if (el) {
+        if (res.ok) {
+          el.textContent = `Alive (${res.elapsed}ms)`;
+          el.className = 'model-item-status status-alive';
+        } else {
+          el.textContent = `Dead (${res.error || 'Failed'})`;
+          el.className = 'model-item-status status-dead';
+          
+          if (autoExclude) {
+            _modalAllowedModels = _modalAllowedModels.filter(m => m !== res.model);
+            const cb = document.querySelector(`#modelList input[value="${res.model}"]`);
+            if (cb) cb.checked = false;
+          }
+        }
+      }
+    });
+
+    completed += batch.length;
+    progressEl.textContent = `${completed}/${selected.length}`;
+    updateModelStats(
+      document.querySelectorAll('#modelList .model-item').length,
+      _modalCachedModels.length
+    );
+  }
+
+  btn.disabled = false;
+  btn.textContent = '⚡ Test Checked Models';
+  progressEl.textContent = _isTestingModels ? 'Done!' : 'Cancelled';
+  _isTestingModels = false;
+}
+
+async function saveModelSelection() {
+  if (_activeProviderIdx === null) return;
+  
+  _providers[_activeProviderIdx].allowedModels = _modalAllowedModels;
+  _providers[_activeProviderIdx].cachedModels = _modalCachedModels;
+
+  // Update button in row
+  const row = document.querySelectorAll('#providerBody tr')[_activeProviderIdx];
+  if (row) {
+    const btn = row.querySelector('.models-btn');
+    if (btn) {
+      btn.textContent = modelLabel(_providers[_activeProviderIdx]);
+      if (_modalAllowedModels.length > 0) {
+        btn.classList.add('has-filter');
+      } else {
+        btn.classList.remove('has-filter');
+      }
+    }
+  }
+
+  // Persist immediately to the server
+  const hintEl = document.getElementById('modalSaveHint');
+  const origHint = hintEl.textContent;
+  hintEl.textContent = 'Saving to server...';
+  hintEl.style.color = 'var(--accent)';
+
+  try {
+    const res = await authFetch('/provider/save-models', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        index: _activeProviderIdx,
+        allowedModels: _modalAllowedModels,
+        cachedModels: _modalCachedModels
+      })
+    });
+    
+    if (res.status === 404) {
+      // Unsaved new row: apply locally, alert user to save config
+      hintEl.textContent = 'Applied locally!';
+      hintEl.style.color = 'var(--yellow)';
+      setTimeout(() => {
+        hintEl.textContent = origHint;
+        hintEl.style.color = '';
+        closeModelModal();
+        alert("Applied locally! Since this is a new provider, please click the global '💾 Save & Apply' button at the bottom of Settings to save it permanently.");
+      }, 800);
+      return;
+    }
+
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      hintEl.textContent = 'Saved successfully!';
+      hintEl.style.color = 'var(--green)';
+      setTimeout(() => {
+        hintEl.textContent = origHint;
+        hintEl.style.color = '';
+        closeModelModal();
+      }, 800);
+    } else {
+      alert('Failed to save to server: ' + (data.error || 'Unknown error'));
+      hintEl.textContent = origHint;
+      hintEl.style.color = '';
+    }
+  } catch (err) {
+    alert('Error saving to server: ' + err.message);
+    hintEl.textContent = origHint;
+    hintEl.style.color = '';
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS: Token
+// ════════════════════════════════════════════════════════════
+async function regenToken(field='proxyAuthToken'){
+  if(!confirm('Generate new token for this API mode?\n\nAnyone using the old key will need to update.'))return;
+  try{
+    const res=await authFetch('/config/regenerate-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field})});
+    const data=await res.json();
+    if(data.ok){
+      const el=document.getElementById(field);
+      if(el) el.value=data.token;
+      if(field==='proxyAuthToken'){
+        _currentToken=data.token;
+        updateAuthExample(data.token);
+      }
+    }else{
+      alert('Failed: '+(data.error||'Unknown'));
+    }
+  }catch(e){alert('Failed: '+e.message);}
+}
+
+function toggleTokenVis(inputId, btnId, e) {
+  if (e) e.preventDefault();
+  const input = document.getElementById(inputId);
+  const btn   = document.getElementById(btnId);
+  if (!input) return;
+  const nowVisible = input.type === 'text';
+  input.type = nowVisible ? 'password' : 'text';
+  if (btn) btn.textContent = nowVisible ? '👁️' : '🙈';
+}
+
+function toggleCardCollapse(bodyId, btnId) {
+  const body = document.getElementById(bodyId);
+  const btn = document.getElementById(btnId);
+  if (!body || !btn) return;
+  const isCollapsed = body.style.display === 'none';
+  body.style.display = isCollapsed ? 'flex' : 'none';
+  btn.textContent = isCollapsed ? '▲' : '▼';
+  localStorage.setItem('proxy_token_collapsed', isCollapsed ? 'false' : 'true');
+}
+
+async function copyProfileField(id, e){
+  const val=document.getElementById(id)?.value;
+  if(!val)return;
+  try{await navigator.clipboard.writeText(val);}catch(ex){}
+  const btn=e&&e.currentTarget;
+  if(!btn)return;
+  const orig=btn.textContent;
+  btn.textContent='✅';
+  setTimeout(()=>btn.textContent=orig,1500);
+}
+
+async function copySettingsToken(e){
+  const val=document.getElementById('proxyAuthToken').value;
+  if(!val)return;
+  try{await navigator.clipboard.writeText(val);}catch(ex){}
+  const btn=e&&e.currentTarget||document.querySelector('[onclick*="copySettingsToken"]');
+  if(!btn)return;
+  const orig=btn.textContent;
+  btn.textContent='✅';
+  setTimeout(()=>btn.textContent=orig,1500);
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS: Save
+// ════════════════════════════════════════════════════════════
+async function saveConfig(){
+  const btn=document.getElementById('saveBtn');
+  const statusEl=document.getElementById('saveStatus');
+
+  // Warn about incomplete rows that will be dropped
+  const incompleteCount = _providers.filter(p => (p.url && !p.key) || (!p.url && p.key)).length;
+  if (incompleteCount > 0) {
+    const ok = confirm(`${incompleteCount} provider row(s) are missing a URL or key and will not be saved. Continue?`);
+    if (!ok) return;
+  }
+
+  btn.disabled=true; btn.textContent='Saving…';
+  statusEl.className='save-status hidden';
+
+  const providers=getProviders();
+  const payload={
+    proxyAuthToken:      document.getElementById('proxyAuthToken').value,
+    anthropicProxyToken: document.getElementById('anthropicProxyToken')?.value || '',
+    googleProxyToken:    document.getElementById('googleProxyToken')?.value    || '',
+    rotationThreshold: parseInt(document.getElementById('rotationThreshold').value)||32,
+    maxPerMinute:      parseInt(document.getElementById('maxPerMinute').value)||35,
+    keyInjectMode:     document.getElementById('keyInjectMode').value,
+    keyInjectParam:    document.getElementById('keyInjectParam').value.trim()||'api_key',
+    keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',
+    providers,
+    apiModes: {
+      openai:    true,
+      anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
+      google:    document.getElementById('apiModeGoogle')?.checked    || false,
+    },
+  };
+
+  try{
+    const res=await authFetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(data.ok){
+      showSaveStatus('✅ '+data.message,false,'success');
+      updateCapBadge();
+      setTimeout(()=>switchTab('monitor'),1200);
+    } else {
+      showSaveStatus('❌ '+(data.error||'Unknown error'),false,'error');
+    }
+  }catch(e){
+    showSaveStatus('❌ Network error: '+e.message,false,'error');
+  }
+
+  btn.disabled=false; btn.textContent='💾 Save & Apply';
+}
+
+function showSaveStatus(msg, hidden, cls){
+  const el=document.getElementById('saveStatus');
+  el.textContent=msg; el.className='save-status '+(hidden?'hidden':cls);
+  if(!hidden) setTimeout(()=>el.classList.add('hidden'),4000);
+}
+
+async function changePassword(e) {
+  e.preventDefault();
+  const username = document.getElementById('updateUsername').value.trim();
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const statusEl = document.getElementById('passwordChangeStatus');
+  
+  if (!username) {
+    statusEl.textContent = '❌ Username cannot be empty';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+  if (!currentPassword) {
+    statusEl.textContent = '❌ Current password is required';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+  if (!newPassword) {
+    statusEl.textContent = '❌ New password is required';
+    statusEl.style.color = 'var(--red)';
+    return;
+  }
+
+  statusEl.textContent = 'Updating...';
+  statusEl.style.color = 'var(--text-muted)';
+
+  try {
+    const res = await authFetch('/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, currentPassword, newPassword })
+    });
+    const data = await res.json();
+    if (res.ok && data.ok) {
+      statusEl.textContent = '✅ Credentials updated successfully!';
+      statusEl.style.color = 'var(--green)';
+      document.getElementById('currentPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      const pDisplay = document.getElementById('profileUsernameDisplay');
+      if (pDisplay) pDisplay.textContent = username;
+    } else {
+      statusEl.textContent = '❌ ' + (data.error || 'Failed to update credentials');
+      statusEl.style.color = 'var(--red)';
+    }
+  } catch (err) {
+    statusEl.textContent = '❌ Network error: ' + err.message;
+    statusEl.style.color = 'var(--red)';
+  }
+}
+
+function doLogout() {
+  _authToken = '';
+  sessionStorage.removeItem('router_token');
+  showLogin('You have been logged out.');
+  switchTab('monitor');
+}
+</script>
+</body>
+</html>
