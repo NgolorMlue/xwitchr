@@ -244,11 +244,18 @@ app.post('/provider/models', async (req, res) => {
 
   try {
     const modelsUrl = url.replace(/\/$/, '') + '/models';
-    const response  = await axios.get(modelsUrl, {
+    let response = await axios.get(modelsUrl, {
       headers:        { 'Authorization': `Bearer ${key}` },
       validateStatus: () => true,
       timeout:        15_000,
     });
+
+    // Google native API may reject bearer auth with 400 — retry with ?key= query param
+    if (response.status === 400 && modelsUrl.includes('googleapis.com')) {
+      const retryUrl = modelsUrl + (modelsUrl.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
+      const retry = await axios.get(retryUrl, { validateStatus: () => true, timeout: 15_000 });
+      if (retry.status === 200) response = retry;
+    }
 
     if (response.status !== 200) {
       return res.json({ ok: false, error: `Provider returned HTTP ${response.status}`, raw: String(response.data).slice(0, 300) });
@@ -261,9 +268,12 @@ app.post('/provider/models', async (req, res) => {
     if (Array.isArray(data?.data)) {
       models = data.data.map(m => m.id || m.name).filter(Boolean);
     }
-    // Some providers: { models: [{name: ...}, ...] } or { models: ['id', ...] }
+    // Google native / some providers: { models: [{name: "models/gemini-...", ...}, ...] }
     else if (Array.isArray(data?.models)) {
-      models = data.models.map(m => (typeof m === 'string' ? m : m.id || m.name)).filter(Boolean);
+      models = data.models.map(m => {
+        const raw = typeof m === 'string' ? m : (m.id || m.name || '');
+        return raw.replace(/^models\//, '');  // strip Google native "models/" prefix
+      }).filter(Boolean);
     }
     // Fallback: plain array of strings
     else if (Array.isArray(data)) {
@@ -430,10 +440,12 @@ app.get(['/v1/models', '/proxy/models'], (req, res) => {
     const list = (p.allowedModels && p.allowedModels.length > 0)
       ? p.allowedModels
       : (p.cachedModels || []);
-    for (const id of list) {
-      if (!seen.has(id)) {
-        seen.add(id);
-        models.push({ id, object: 'model', created: 0, owned_by: 'router' });
+    for (const entry of list) {
+      const modelName = typeof entry === 'object' ? entry.name : entry;
+      if (!modelName) continue;
+      if (!seen.has(modelName)) {
+        seen.add(modelName);
+        models.push({ id: modelName, object: 'model', created: 0, owned_by: 'router' });
       }
     }
   }
