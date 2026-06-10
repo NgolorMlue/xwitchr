@@ -18,6 +18,10 @@ const cors    = require('cors');
 const morgan  = require('morgan');
 const path    = require('path');
 
+// Force IPv4 on all outbound requests — many VPS hosts have no IPv6 routing
+const ipv4HttpAgent  = new http.Agent({ family: 4 });
+const ipv4HttpsAgent = new https.Agent({ family: 4 });
+
 const KeyPool       = require('./src/keyPool');
 const RequestLogger = require('./src/requestLogger');
 const configStore   = require('./src/configStore');
@@ -248,12 +252,14 @@ app.post('/provider/models', async (req, res) => {
       headers:        { 'Authorization': `Bearer ${key}` },
       validateStatus: () => true,
       timeout:        15_000,
+      httpAgent:      ipv4HttpAgent,
+      httpsAgent:     ipv4HttpsAgent,
     });
 
     // Google native API may reject bearer auth with 400 — retry with ?key= query param
     if (response.status === 400 && modelsUrl.includes('googleapis.com')) {
       const retryUrl = modelsUrl + (modelsUrl.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
-      const retry = await axios.get(retryUrl, { validateStatus: () => true, timeout: 15_000 });
+      const retry = await axios.get(retryUrl, { validateStatus: () => true, timeout: 15_000, httpAgent: ipv4HttpAgent, httpsAgent: ipv4HttpsAgent });
       if (retry.status === 200) response = retry;
     }
 
@@ -342,7 +348,9 @@ app.post('/provider/test-model', async (req, res) => {
         'Content-Type': 'application/json'
       },
       timeout: 10000,
-      validateStatus: () => true
+      validateStatus: () => true,
+      httpAgent: ipv4HttpAgent,
+      httpsAgent: ipv4HttpsAgent,
     });
 
     const elapsed = Date.now() - startTime;
@@ -363,7 +371,9 @@ app.post('/provider/test-model', async (req, res) => {
             'Content-Type': 'application/json'
           },
           timeout: 10000,
-          validateStatus: () => true
+          validateStatus: () => true,
+          httpAgent: ipv4HttpAgent,
+          httpsAgent: ipv4HttpsAgent,
         });
         
         if (fallbackRes.status === 200) {
@@ -577,6 +587,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           const proxyReq = transport.request(urlObj, {
             method: req.method,
             headers: upstreamHeaders,
+            agent: urlObj.protocol === 'https:' ? ipv4HttpsAgent : ipv4HttpAgent,
           }, (proxyRes) => {
             const responseTime = Date.now() - startTime;
 
@@ -708,6 +719,8 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         validateStatus: () => true,
         responseType:   'arraybuffer',
         timeout:        30_000,
+        httpAgent:      ipv4HttpAgent,
+        httpsAgent:     ipv4HttpsAgent,
       });
 
       if (upstream.status >= 500 && attempts < maxAttempts - 1) {
