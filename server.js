@@ -17,10 +17,17 @@ const https   = require('https');
 const cors    = require('cors');
 const morgan  = require('morgan');
 const path    = require('path');
+const dns     = require('dns');
+
+// Prioritize IPv4 DNS resolution globally (Node.js v17+ defaults to verbatim which can resolve IPv6 first)
+if (typeof dns.setDefaultResultOrder === 'function') {
+  dns.setDefaultResultOrder('ipv4first');
+}
 
 // Force IPv4 on all outbound requests — many VPS hosts have no IPv6 routing
 const ipv4HttpAgent  = new http.Agent({ family: 4 });
 const ipv4HttpsAgent = new https.Agent({ family: 4 });
+
 
 const KeyPool       = require('./src/keyPool');
 const RequestLogger = require('./src/requestLogger');
