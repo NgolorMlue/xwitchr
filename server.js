@@ -278,8 +278,8 @@ app.post('/config/update', (req, res) => {
 
     // Exit process after a short delay so the response finishes sending
     setTimeout(() => {
-      console.log('[System] Exiting process for auto-restart...');
-      process.exit(0);
+      console.log('[System] Exiting process with code 1 to trigger PM2/systemd auto-restart...');
+      process.exit(1);
     }, 1500);
   });
 });
