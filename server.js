@@ -293,7 +293,12 @@ app.post('/provider/models', async (req, res) => {
   if (!isConfiguredProvider(url, key)) return res.status(403).json({ ok: false, error: 'URL/key not in configured providers' });
 
   try {
-    const modelsUrl = url.replace(/\/$/, '') + '/models';
+    let modelsUrl = url.replace(/\/$/, '') + '/models';
+    if (modelsUrl.includes('googleapis.com')) {
+      // Google's OpenAI-compatible endpoint does not support /models, rewrite to native endpoint
+      modelsUrl = modelsUrl.replace(/\/openai\/models$/, '/models');
+    }
+
     let response = await axios.get(modelsUrl, {
       headers:        { 'Authorization': `Bearer ${key}` },
       validateStatus: () => true,
