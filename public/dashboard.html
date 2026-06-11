@@ -2442,7 +2442,10 @@ function updateMirrorChart() {
   _mirrorChart.options.scales.yRPM.min = -maxReq * 1.1;
   _mirrorChart.options.scales.yRPM.max = maxReq * 1.1;
   _mirrorChart.options.scales.yRPM.ticks.callback = function(value) {
-    return value >= 0 ? value : '';
+    if (value >= 0) {
+      return Number(value.toFixed(1));
+    }
+    return '';
   };
 
   _mirrorChart.options.scales.yLatency.min = -maxTok * 1.1;
