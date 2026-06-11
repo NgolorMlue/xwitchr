@@ -27,6 +27,10 @@ const RequestLogger = require('./src/requestLogger');
 const configStore   = require('./src/configStore');
 const { generateToken } = configStore;
 const fmt = require('./src/formatConverter');
+const fs = require('fs');
+const pkg = require('./package.json');
+const APP_VERSION = pkg.version || '1.0.0';
+
 
 // ── Boot ───────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT || '51067', 10);
@@ -179,6 +183,7 @@ app.get('/config', (req, res) => {
     dashboardUsername: cfg.dashboardUsername,
     providerCount:     safeProviders.length,
     providers:         safeProviders,
+    version:           APP_VERSION,
   });
 });
 
@@ -189,6 +194,7 @@ app.get('/config/full', (req, res) => {
     ...cfg,
     dashboardPasswordHash: undefined,
     providerCount: cfg.providers ? cfg.providers.length : 0,
+    version:       APP_VERSION,
   });
 });
 
@@ -229,6 +235,46 @@ app.post('/config/regenerate-token', (req, res) => {
   pool = buildPool(cfg);
   console.log(`[Config] ${field} regenerated`);
   res.json({ ok: true, field, token: newToken });
+});
+
+// ── POST /config/update ───────────────────────────────────────────────────
+// Performs git pull and npm install to update the app, then exits to let PM2/systemd restart it.
+const { exec } = require('child_process');
+app.post('/config/update', (req, res) => {
+  const gitDir = path.join(__dirname, '.git');
+  if (!fs.existsSync(gitDir)) {
+    console.warn('[Update Warning] Blocked: Project is not running inside a Git repository (likely running in Docker).');
+    return res.status(400).json({
+      ok: false,
+      error: 'In-app update is only supported when running directly from a Git clone (non-Docker). For Docker deployments, please use Watchtower or rebuild the image.'
+    });
+  }
+
+  console.log('[System] Manual update triggered via dashboard settings...');
+  
+  exec('git pull && npm install --omit=dev', (err, stdout, stderr) => {
+    if (err) {
+      console.error('[Update Error] Git pull or npm install failed:', err.message);
+      return res.status(500).json({
+        ok: false,
+        error: 'Update script failed: ' + err.message,
+        log: stderr || err.message
+      });
+    }
+    
+    console.log('[Update Success] App updated. Output:\n', stdout);
+    res.json({
+      ok: true,
+      message: 'Update successful! Exiting server to allow PM2/systemd to auto-restart the process.',
+      log: stdout
+    });
+
+    // Exit process after a short delay so the response finishes sending
+    setTimeout(() => {
+      console.log('[System] Exiting process for auto-restart...');
+      process.exit(0);
+    }, 1500);
+  });
 });
 
 // Returns true only if the given url+key pair matches a configured provider.

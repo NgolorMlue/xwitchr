@@ -802,6 +802,25 @@
         </div>
       </div>
 
+      <!-- System Info & Update -->
+      <div class="card" style="margin-top: 14px;">
+        <div class="section-header"><div class="section-title">ℹ️ System &amp; Updates</div></div>
+        <div style="display:flex; flex-direction:column; gap:10px;">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="color:var(--text-muted); font-size:12px;">App Name</span>
+            <span style="font-weight:600; color:var(--text); font-size:12px;">XWITCHR</span>
+          </div>
+          <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:10px;">
+            <span style="color:var(--text-muted); font-size:12px;">Version</span>
+            <span style="font-family:var(--font-mono); font-weight:600; color:var(--accent); font-size:12px;" id="appVersionDisplay">v1.0.0</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
+            <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="width:100%; font-weight:600; font-size:12px; padding: 8px 14px;">🔄 Update App from GitHub</button>
+            <div id="updateStatusText" class="form-hint" style="text-align:center; min-height:16px; margin:0; color:var(--text-muted); font-size:11px; line-height:1.4;"></div>
+            <pre id="updateLogOutput" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:10px; color:var(--text-muted); max-height:150px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px; text-align:left;"></pre>
+          </div>
+        </div>
+      </div>
 
     </div><!-- end left col -->
 
@@ -3315,6 +3334,8 @@ async function loadConfig(){
     updateCapBadge();
     onModeChange();
     updateAuthExample(cfg.proxyAuthToken||'');
+    const versionEl = document.getElementById('appVersionDisplay');
+    if (versionEl) versionEl.textContent = 'v' + (cfg.version || '1.0.0');
     // Load API modes
     const modes = cfg.apiModes || {};
     const elAnt = document.getElementById('apiModeAnthropic');
@@ -4088,6 +4109,115 @@ function doLogout() {
   sessionStorage.removeItem('router_token');
   showLogin('You have been logged out.');
   switchTab('monitor');
+}
+
+async function triggerAppUpdate() {
+  const btn = document.getElementById('updateBtn');
+  const statusEl = document.getElementById('updateStatusText');
+  const logEl = document.getElementById('updateLogOutput');
+  
+  if (!btn || !statusEl || !logEl) return;
+  if (!confirm('Are you sure you want to pull the latest updates from GitHub and restart the router?')) return;
+
+  btn.disabled = true;
+  const origText = btn.textContent;
+  btn.textContent = '⚙️ Updating...';
+  statusEl.textContent = 'Running updates on the server (git pull & npm install)...';
+  statusEl.style.color = 'var(--text-muted)';
+  logEl.style.display = 'none';
+  logEl.textContent = '';
+
+  try {
+    const res = await authFetch('/config/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    
+    if (res.status === 400) {
+      // Docker/Git environment error
+      statusEl.textContent = '❌ Update blocked';
+      statusEl.style.color = 'var(--red)';
+      alert('Update blocked:\n' + (data.error || 'Check server configuration.'));
+      btn.disabled = false;
+      btn.textContent = origText;
+      return;
+    }
+
+    if (!res.ok || !data.ok) {
+      statusEl.textContent = '❌ Update failed';
+      statusEl.style.color = 'var(--red)';
+      logEl.style.display = 'block';
+      logEl.textContent = (data.error || 'Unknown error') + '\n\nLogs:\n' + (data.log || '');
+      btn.disabled = false;
+      btn.textContent = origText;
+      return;
+    }
+
+    // Success! Show logs and begin polling for server reboot
+    statusEl.textContent = '✅ Update successful! Restarting server...';
+    statusEl.style.color = 'var(--green)';
+    logEl.style.display = 'block';
+    logEl.textContent = data.log || 'No logs returned.';
+    btn.textContent = '🔄 Restarting...';
+
+    // Poll server status until it reboots
+    pollServerRestart();
+
+  } catch (err) {
+    statusEl.textContent = '❌ Connection error';
+    statusEl.style.color = 'var(--red)';
+    logEl.style.display = 'block';
+    logEl.textContent = err.message;
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+function pollServerRestart() {
+  const statusEl = document.getElementById('updateStatusText');
+  let offlineDetected = false;
+  let attempts = 0;
+  const maxAttempts = 40; // 40 seconds max
+
+  const interval = setInterval(async () => {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(interval);
+      statusEl.textContent = '⚠️ Server restart timeout. Please check console logs.';
+      statusEl.style.color = 'var(--yellow)';
+      return;
+    }
+
+    try {
+      // We check '/status' using simple fetch without auth to verify connection status
+      const res = await fetch('/status', { method: 'GET', cache: 'no-store' });
+      if (res.ok) {
+        if (offlineDetected) {
+          // It was offline, now back online!
+          clearInterval(interval);
+          statusEl.textContent = '🎉 Server back online! Reloading dashboard...';
+          statusEl.style.color = 'var(--green)';
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else {
+          statusEl.textContent = 'Waiting for server to shut down...';
+        }
+      } else {
+        // HTTP error, server shutting down
+        offlineDetected = true;
+        statusEl.textContent = 'Server offline (restarting)...';
+        statusEl.style.color = 'var(--yellow)';
+      }
+    } catch (err) {
+      // Connection refused/failed = server is currently rebooting
+      offlineDetected = true;
+      statusEl.textContent = 'Server offline (restarting)...';
+      statusEl.style.color = 'var(--yellow)';
+    }
+  }, 1000);
 }
 </script>
 </body>
