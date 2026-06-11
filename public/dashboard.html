@@ -601,9 +601,9 @@
     </div>
     <div class="log-wrap">
       <table>
-        <thead><tr><th>Time</th><th>Method</th><th>Path</th><th>Provider</th><th>Key</th><th>Tokens</th><th>Status</th><th>RT</th></tr></thead>
+        <thead><tr><th>Time</th><th>Method</th><th>Model</th><th>Path</th><th>Provider</th><th>Key</th><th>Tokens</th><th>Status</th><th>RT</th></tr></thead>
         <tbody id="logBody">
-          <tr><td colspan="8" class="empty-row">No requests yet — send traffic through /proxy/*</td></tr>
+          <tr><td colspan="9" class="empty-row">No requests yet — send traffic through /proxy/*</td></tr>
         </tbody>
       </table>
     </div>
@@ -1108,6 +1108,9 @@
         <span style="color: var(--text-muted); font-weight: 600;">Method:</span>
         <span id="inspectMethod" style="font-family: var(--font-mono); font-weight: bold; color: var(--accent);">—</span>
         
+        <span style="color: var(--text-muted); font-weight: 600;">Model:</span>
+        <span id="inspectModel" style="font-family: var(--font-mono); color: var(--text);">—</span>
+
         <span style="color: var(--text-muted); font-weight: 600;">Path:</span>
         <span id="inspectPath" style="font-family: var(--font-mono); word-break: break-all; color: var(--text);">—</span>
 
@@ -2554,7 +2557,7 @@ function renderLogsTable() {
   });
 
   if (!filtered.length) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No matching requests found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">No matching requests found.</td></tr>';
     return;
   }
 
@@ -2572,6 +2575,7 @@ function renderLogsTable() {
     return `<tr onclick="openLogInspector(${logIdx})" style="cursor: pointer;" title="Click to inspect request details">
       <td>${t}</td>
       <td class="m">${escHtml(e.method || '')}</td>
+      <td style="font-family:var(--font-mono); color:var(--text-muted)">${escHtml(e.model || '—')}</td>
       <td class="p">${escHtml(e.path || '')}</td>
       <td style="color:var(--text-muted)">${escHtml(e.urlHint || '—')}</td>
       <td>${escHtml(e.keyHint || '—')}</td>
@@ -3122,6 +3126,7 @@ function openLogInspector(idx) {
 
   document.getElementById('inspectTimestamp').textContent = new Date(log.timestamp).toLocaleString();
   document.getElementById('inspectMethod').textContent = log.method || 'GET';
+  document.getElementById('inspectModel').textContent = log.model || '—';
   document.getElementById('inspectPath').textContent = log.path || '/';
   
   const statusEl = document.getElementById('inspectStatus');
@@ -3190,7 +3195,7 @@ function toggleInspectPayloadExpand() {
 }
 
 function clearLogs(){
-  document.getElementById('logBody').innerHTML='<tr><td colspan="7" class="empty-row">Log cleared.</td></tr>';
+  document.getElementById('logBody').innerHTML='<tr><td colspan="9" class="empty-row">Log cleared.</td></tr>';
   lastLogCount=-1;
 }
 

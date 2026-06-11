@@ -1,6 +1,6 @@
 {
   "name": "api-key-router",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "API Key Pool Router with shift-based key management and quota rotation",
   "main": "server.js",
   "scripts": {

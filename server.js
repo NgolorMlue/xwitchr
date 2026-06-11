@@ -563,7 +563,14 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
   let requestedModel = null;
   if (req.body && typeof req.body === 'object' && req.body.model) {
     requestedModel = String(req.body.model);
+  } else {
+    // Try to extract from path for Google native API: /v1/beta/models/gemini-1.5-flash:generateContent
+    const googleModelMatch = req.path.match(/\/(?:proxy|v1)\/(?:beta\/)?models\/([^:/]+)/);
+    if (googleModelMatch) {
+      requestedModel = googleModelMatch[1];
+    }
   }
+
 
   const cleanPath = req.path.replace(/^\/(proxy|v1)/, '');
   if (['/props', '/slots', '/metrics'].includes(cleanPath)) {
