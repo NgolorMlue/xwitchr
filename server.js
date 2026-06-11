@@ -244,9 +244,39 @@ app.post('/config/regenerate-token', (req, res) => {
   res.json({ ok: true, field, token: newToken });
 });
 
+// ── GET /config/check-update ──────────────────────────────────────────────
+// Checks if there are any new commits on origin/master compared to the local HEAD.
+const { exec } = require('child_process');
+app.get('/config/check-update', (req, res) => {
+  const gitDir = path.join(__dirname, '.git');
+  if (!fs.existsSync(gitDir)) {
+    return res.json({ ok: false, available: false, error: 'Not running inside a Git repository.' });
+  }
+
+  exec('git fetch', (fetchErr) => {
+    if (fetchErr) {
+      console.warn('[Update Check] git fetch failed:', fetchErr.message);
+      return res.json({ ok: false, available: false, error: 'Failed to fetch updates from GitHub: ' + fetchErr.message });
+    }
+
+    exec('git rev-list --count HEAD..origin/master', (diffErr, stdout) => {
+      if (diffErr) {
+        console.warn('[Update Check] git rev-list failed:', diffErr.message);
+        return res.json({ ok: false, available: false, error: 'Failed to check commit difference: ' + diffErr.message });
+      }
+
+      const count = parseInt(stdout.trim(), 10) || 0;
+      res.json({
+        ok: true,
+        available: count > 0,
+        commitsBehind: count
+      });
+    });
+  });
+});
+
 // ── POST /config/update ───────────────────────────────────────────────────
 // Performs git pull and npm install to update the app, then exits to let PM2/systemd restart it.
-const { exec } = require('child_process');
 app.post('/config/update', (req, res) => {
   const gitDir = path.join(__dirname, '.git');
   if (!fs.existsSync(gitDir)) {

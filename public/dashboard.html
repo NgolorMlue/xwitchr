@@ -1167,6 +1167,7 @@
 // AUTH — all API calls go through authFetch()
 // ════════════════════════════════════════════════════════════
 let _authToken = sessionStorage.getItem('router_token') || '';
+let _updateAvailable = false;
 
 function authFetch(url, opts = {}) {
   if (!opts.headers) opts.headers = {};
@@ -3357,6 +3358,7 @@ async function loadConfig(){
       if (pDisplay) pDisplay.textContent = username;
     }
     populateModelsTabProviderSelect();
+    checkUpdates();
   }catch(e){console.warn('config load failed',e);}
 }
 
@@ -4119,21 +4121,98 @@ function doLogout() {
   switchTab('monitor');
 }
 
+async function checkUpdates() {
+  const statusEl = document.getElementById('updateStatusText');
+  const btn = document.getElementById('updateBtn');
+  if (!statusEl || !btn) return;
+
+  statusEl.textContent = 'Checking for updates...';
+  statusEl.style.color = 'var(--text-muted)';
+
+  try {
+    const res = await authFetch('/config/check-update');
+    if (res.status === 401) return;
+    const data = await res.json();
+    
+    if (data.ok) {
+      if (data.available) {
+        statusEl.textContent = `Update available! (${data.commitsBehind} commit${data.commitsBehind !== 1 ? 's' : ''} behind)`;
+        statusEl.style.color = 'var(--yellow)';
+        btn.textContent = '🔄 Update App from GitHub';
+        btn.classList.add('accent');
+        _updateAvailable = true;
+      } else {
+        statusEl.textContent = 'App is up to date.';
+        statusEl.style.color = 'var(--green)';
+        btn.textContent = '🔄 Reinstall/Force Update';
+        btn.classList.remove('accent');
+        _updateAvailable = false;
+      }
+    } else {
+      statusEl.textContent = data.error || 'Update check skipped (non-Git).';
+      statusEl.style.color = 'var(--text-muted)';
+      _updateAvailable = false;
+    }
+  } catch (err) {
+    statusEl.textContent = 'Failed to check updates: ' + err.message;
+    statusEl.style.color = 'var(--red)';
+    _updateAvailable = false;
+  }
+}
+
 async function triggerAppUpdate() {
   const btn = document.getElementById('updateBtn');
   const statusEl = document.getElementById('updateStatusText');
   const logEl = document.getElementById('updateLogOutput');
   
   if (!btn || !statusEl || !logEl) return;
-  if (!confirm('Are you sure you want to pull the latest updates from GitHub and restart the router?')) return;
 
   btn.disabled = true;
   const origText = btn.textContent;
-  btn.textContent = '⚙️ Updating...';
-  statusEl.textContent = 'Running updates on the server (git pull & npm install)...';
+  statusEl.textContent = 'Checking update availability...';
   statusEl.style.color = 'var(--text-muted)';
   logEl.style.display = 'none';
   logEl.textContent = '';
+
+  try {
+    const checkRes = await authFetch('/config/check-update');
+    const checkData = await checkRes.json();
+
+    if (checkData.ok) {
+      _updateAvailable = checkData.available;
+      if (!_updateAvailable) {
+        if (!confirm('No new updates are available. Do you want to force reinstall the current version anyway?')) {
+          btn.disabled = false;
+          statusEl.textContent = 'App is up to date.';
+          statusEl.style.color = 'var(--green)';
+          return;
+        }
+      } else {
+        if (!confirm(`Update available! (${checkData.commitsBehind} commit(s) behind). Do you want to pull and install it now?`)) {
+          btn.disabled = false;
+          statusEl.textContent = `Update available! (${checkData.commitsBehind} commit(s) behind)`;
+          statusEl.style.color = 'var(--yellow)';
+          return;
+        }
+      }
+    } else {
+      if (!confirm('Could not verify updates: ' + (checkData.error || 'Unknown error') + '\n\nDo you want to attempt the update anyway?')) {
+        btn.disabled = false;
+        statusEl.textContent = checkData.error || 'Update check failed.';
+        return;
+      }
+    }
+  } catch (err) {
+    if (!confirm('Failed to check updates: ' + err.message + '\n\nDo you want to attempt the update anyway?')) {
+      btn.disabled = false;
+      statusEl.textContent = 'Failed to check updates.';
+      return;
+    }
+  }
+
+  btn.textContent = '⚙️ Updating...';
+  statusEl.textContent = 'Running updates on the server (git pull & npm install)...';
+  statusEl.style.color = 'var(--text-muted)';
 
   try {
     const res = await authFetch('/config/update', {
@@ -4144,7 +4223,6 @@ async function triggerAppUpdate() {
     const data = await res.json();
     
     if (res.status === 400) {
-      // Docker/Git environment error
       statusEl.textContent = '❌ Update blocked';
       statusEl.style.color = 'var(--red)';
       alert('Update blocked:\n' + (data.error || 'Check server configuration.'));
@@ -4163,14 +4241,12 @@ async function triggerAppUpdate() {
       return;
     }
 
-    // Success! Show logs and begin polling for server reboot
     statusEl.textContent = '✅ Update successful! Restarting server...';
     statusEl.style.color = 'var(--green)';
     logEl.style.display = 'block';
     logEl.textContent = data.log || 'No logs returned.';
     btn.textContent = '🔄 Restarting...';
 
-    // Poll server status until it reboots
     pollServerRestart();
 
   } catch (err) {
