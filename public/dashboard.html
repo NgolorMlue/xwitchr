@@ -788,14 +788,15 @@
           <select class="form-select" id="rotationMode" onchange="onRotationModeChange()">
             <option value="time">Sticky (Time-Based)</option>
             <option value="round-robin">Round-Robin (Per Request)</option>
+            <option value="random">Randomized</option>
             <option value="threshold">Threshold-Based (RPM Limit)</option>
           </select>
           <div class="form-hint">How the router chooses the next API provider.</div>
         </div>
         <div class="form-group" id="roundRobinGroup" style="margin-bottom: 12px; display: none;">
-          <label class="form-label" for="roundRobinSwitchLimit">Round-Robin Request Limit</label>
+          <label class="form-label" for="roundRobinSwitchLimit">Request Switch Limit</label>
           <input class="form-input" id="roundRobinSwitchLimit" type="number" min="1" max="999" placeholder="1" />
-          <div class="form-hint">Number of requests to send to a key before switching to the next one</div>
+          <div class="form-hint">Number of requests to send to a key before rotating/switching</div>
         </div>
         <div class="form-row">
           <div class="form-group">
@@ -3537,7 +3538,7 @@ function onRotationModeChange() {
     group.style.display = mode === 'time' ? 'flex' : 'none';
   }
   if (rrGroup) {
-    rrGroup.style.display = mode === 'round-robin' ? 'flex' : 'none';
+    rrGroup.style.display = (mode === 'round-robin' || mode === 'random') ? 'flex' : 'none';
   }
 }
 

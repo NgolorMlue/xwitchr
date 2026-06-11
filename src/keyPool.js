@@ -183,7 +183,11 @@ class KeyPool {
         }
 
         if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
-          this.currentIndex = (idx + 1) % total;
+          if (this.rotationMode === 'random') {
+            this.currentIndex = Math.floor(Math.random() * total);
+          } else {
+            this.currentIndex = (idx + 1) % total;
+          }
           this.roundRobinRequestCount = 0;
         }
       }
@@ -216,7 +220,11 @@ class KeyPool {
           }
 
           if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
-            this.currentIndex = (idx + 1) % total;
+            if (this.rotationMode === 'random') {
+              this.currentIndex = Math.floor(Math.random() * total);
+            } else {
+              this.currentIndex = (idx + 1) % total;
+            }
             this.roundRobinRequestCount = 0;
           }
         }

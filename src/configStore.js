@@ -171,7 +171,7 @@ function save(config) {
   merged.rotationThreshold = parseInt(merged.rotationThreshold, 10) || 32;
   merged.maxPerMinute      = parseInt(merged.maxPerMinute,      10) || 35;
   merged.rotationIntervalMin = parseInt(merged.rotationIntervalMin, 10) >= 0 ? parseInt(merged.rotationIntervalMin, 10) : 60;
-  merged.rotationMode      = ['time', 'round-robin', 'threshold'].includes(merged.rotationMode) ? merged.rotationMode : 'time';
+  merged.rotationMode      = ['time', 'round-robin', 'threshold', 'random'].includes(merged.rotationMode) ? merged.rotationMode : 'time';
   merged.roundRobinSwitchLimit = parseInt(merged.roundRobinSwitchLimit, 10) >= 1 ? parseInt(merged.roundRobinSwitchLimit, 10) : 1;
   if (!merged.proxyAuthToken)      merged.proxyAuthToken     = generateToken();
   if (!merged.anthropicProxyToken) merged.anthropicProxyToken = generateToken();
