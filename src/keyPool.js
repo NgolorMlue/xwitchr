@@ -9,11 +9,14 @@ const OFFLINE_THRESHOLD = 3;
 const OFFLINE_RETRY_MS  = 60_000;
 
 class KeyPool {
-  constructor(providers, threshold = 32, maxPerMinute = 35, rotationIntervalMin = 60) {
+  constructor(providers, threshold = 32, maxPerMinute = 35, rotationIntervalMin = 60, rotationMode = 'time', roundRobinSwitchLimit = 1) {
     this.providers    = providers;
     this.threshold    = threshold;
     this.maxPerMinute = maxPerMinute;
     this.rotationIntervalMin = rotationIntervalMin;
+    this.rotationMode = rotationMode;
+    this.roundRobinSwitchLimit = roundRobinSwitchLimit;
+    this.roundRobinRequestCount = 0;
     this.windows            = {};
     this.tokenWindows       = {};
     this.modelWindows       = {};  // `${provId}::${model}` → [timestamps]
@@ -135,7 +138,7 @@ class KeyPool {
     if (!anyEligible) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
 
     // Trigger time-based rotation check at the start of selection (top-level invocation only)
-    if (depth === 0 && this.rotationIntervalMin > 0 && total > 1) {
+    if (depth === 0 && this.rotationMode === 'time' && total > 1) {
       const elapsed = Date.now() - this.lastRotationTime;
       const intervalMs = this.rotationIntervalMin * 60_000;
       if (elapsed >= intervalMs) {
@@ -164,15 +167,25 @@ class KeyPool {
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
-      if (this.rotationIntervalMin > 0) {
-        // Time-based rotation: stick to this provider, reset timer only on failover transition
+      if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
+        // Sticky behavior: stick to this provider, reset timer only on failover transition
         if (idx !== this.currentIndex) {
           this.currentIndex = idx;
           this.lastRotationTime = Date.now();
         }
       } else {
-        // Round-robin: rotate immediately on every request
-        this.currentIndex = (idx + 1) % total;
+        // Round-robin
+        if (idx !== this.currentIndex) {
+          this.currentIndex = idx;
+          this.roundRobinRequestCount = 1;
+        } else {
+          this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+        }
+
+        if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+          this.currentIndex = (idx + 1) % total;
+          this.roundRobinRequestCount = 0;
+        }
       }
       return p;
     }
@@ -188,13 +201,24 @@ class KeyPool {
       if (excludeSet && excludeSet.has(id)) continue;
       if (!this._supportsModel(p, model)) continue;
       if (!this._isRateLimited(p, model)) {
-        if (this.rotationIntervalMin > 0) {
+        if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
           if (idx !== this.currentIndex) {
             this.currentIndex = idx;
             this.lastRotationTime = Date.now();
           }
         } else {
-          this.currentIndex = (idx + 1) % total;
+          // Round-robin fallback
+          if (idx !== this.currentIndex) {
+            this.currentIndex = idx;
+            this.roundRobinRequestCount = 1;
+          } else {
+            this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+          }
+
+          if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+            this.currentIndex = (idx + 1) % total;
+            this.roundRobinRequestCount = 0;
+          }
         }
         return p;
       }

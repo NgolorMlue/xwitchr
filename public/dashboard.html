@@ -783,6 +783,20 @@
       <!-- Rotation -->
       <div class="card">
         <div class="section-header"><div class="section-title">🔄 Rotation Settings</div></div>
+        <div class="form-group" style="margin-bottom: 12px;">
+          <label class="form-label" for="rotationMode">Router Mode</label>
+          <select class="form-select" id="rotationMode" onchange="onRotationModeChange()">
+            <option value="time">Sticky (Time-Based)</option>
+            <option value="round-robin">Round-Robin (Per Request)</option>
+            <option value="threshold">Threshold-Based (RPM Limit)</option>
+          </select>
+          <div class="form-hint">How the router chooses the next API provider.</div>
+        </div>
+        <div class="form-group" id="roundRobinGroup" style="margin-bottom: 12px; display: none;">
+          <label class="form-label" for="roundRobinSwitchLimit">Round-Robin Request Limit</label>
+          <input class="form-input" id="roundRobinSwitchLimit" type="number" min="1" max="999" placeholder="1" />
+          <div class="form-hint">Number of requests to send to a key before switching to the next one</div>
+        </div>
         <div class="form-row">
           <div class="form-group">
             <label class="form-label" for="rotationThreshold">Rotate At</label>
@@ -795,10 +809,10 @@
             <div class="form-hint">Provider's real limit</div>
           </div>
         </div>
-        <div class="form-group" style="margin-top: 12px;">
+        <div class="form-group" id="rotationIntervalGroup" style="margin-top: 12px;">
           <label class="form-label" for="rotationIntervalMin">Rotation Interval (minutes)</label>
           <input class="form-input" id="rotationIntervalMin" type="number" min="0" max="99999" placeholder="60" />
-          <div class="form-hint">Keep the same key active for this duration before switching (0 for round-robin)</div>
+          <div class="form-hint">Keep the same key active for this duration before switching</div>
         </div>
         <div style="margin-top:14px;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">EFFECTIVE CAPACITY</div>
@@ -3335,6 +3349,8 @@ async function loadConfig(){
     document.getElementById('rotationThreshold').value=cfg.rotationThreshold||32;
     document.getElementById('maxPerMinute').value=cfg.maxPerMinute||35;
     document.getElementById('rotationIntervalMin').value=cfg.rotationIntervalMin !== undefined ? cfg.rotationIntervalMin : 60;
+    document.getElementById('rotationMode').value=cfg.rotationMode||'time';
+    document.getElementById('roundRobinSwitchLimit').value=cfg.roundRobinSwitchLimit !== undefined ? cfg.roundRobinSwitchLimit : 1;
     document.getElementById('keyInjectMode').value=cfg.keyInjectMode||'bearer';
     document.getElementById('keyInjectParam').value=cfg.keyInjectParam||'api_key';
     document.getElementById('keyInjectHeader').value=cfg.keyInjectHeader||'X-API-Key';
@@ -3348,9 +3364,12 @@ async function loadConfig(){
     renderProviderTable(_providers);
     updateCapBadge();
     onModeChange();
+    onRotationModeChange();
     updateAuthExample(cfg.proxyAuthToken||'');
     const versionEl = document.getElementById('appVersionDisplay');
-    if (versionEl) versionEl.textContent = 'v' + (cfg.version || '1.0.0');
+    if (versionEl) {
+      versionEl.textContent = 'v' + (cfg.version || '1.0.0') + (cfg.commit ? ` (${cfg.commit})` : '');
+    }
     // Load API modes
     const modes = cfg.apiModes || {};
     const elAnt = document.getElementById('apiModeAnthropic');
@@ -3508,6 +3527,18 @@ function onModeChange(){
   const mode=document.getElementById('keyInjectMode').value;
   document.getElementById('paramGroup').style.opacity=mode==='query'?'1':'0.35';
   document.getElementById('headerGroup').style.opacity=mode==='header'?'1':'0.35';
+}
+
+function onRotationModeChange() {
+  const mode = document.getElementById('rotationMode').value;
+  const group = document.getElementById('rotationIntervalGroup');
+  const rrGroup = document.getElementById('roundRobinGroup');
+  if (group) {
+    group.style.display = mode === 'time' ? 'flex' : 'none';
+  }
+  if (rrGroup) {
+    rrGroup.style.display = mode === 'round-robin' ? 'flex' : 'none';
+  }
 }
 
 function updateAuthExample(token){
@@ -4037,6 +4068,8 @@ async function saveConfig(){
     rotationThreshold: parseInt(document.getElementById('rotationThreshold').value)||32,
     maxPerMinute:      parseInt(document.getElementById('maxPerMinute').value)||35,
     rotationIntervalMin: parseInt(document.getElementById('rotationIntervalMin').value) >= 0 ? parseInt(document.getElementById('rotationIntervalMin').value) : 60,
+    rotationMode:      document.getElementById('rotationMode').value,
+    roundRobinSwitchLimit: parseInt(document.getElementById('roundRobinSwitchLimit').value) >= 1 ? parseInt(document.getElementById('roundRobinSwitchLimit').value) : 1,
     keyInjectMode:     document.getElementById('keyInjectMode').value,
     keyInjectParam:    document.getElementById('keyInjectParam').value.trim()||'api_key',
     keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',

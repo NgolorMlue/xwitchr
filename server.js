@@ -37,6 +37,13 @@ const fmt = require('./src/formatConverter');
 const fs = require('fs');
 const pkg = require('./package.json');
 const APP_VERSION = pkg.version || '1.0.0';
+const { execSync } = require('child_process');
+let GIT_COMMIT = '';
+try {
+  GIT_COMMIT = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+} catch (e) {
+  GIT_COMMIT = '';
+}
 
 
 // ── Boot ───────────────────────────────────────────────────────────────────
@@ -47,7 +54,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -185,6 +192,8 @@ app.get('/config', (req, res) => {
     rotationThreshold: cfg.rotationThreshold,
     maxPerMinute:      cfg.maxPerMinute,
     rotationIntervalMin: cfg.rotationIntervalMin !== undefined ? cfg.rotationIntervalMin : 60,
+    rotationMode:      cfg.rotationMode || 'time',
+    roundRobinSwitchLimit: cfg.roundRobinSwitchLimit !== undefined ? cfg.roundRobinSwitchLimit : 1,
     keyInjectMode:     cfg.keyInjectMode,
     keyInjectParam:    cfg.keyInjectParam,
     keyInjectHeader:   cfg.keyInjectHeader,
@@ -192,6 +201,7 @@ app.get('/config', (req, res) => {
     providerCount:     safeProviders.length,
     providers:         safeProviders,
     version:           APP_VERSION,
+    commit:            GIT_COMMIT,
   });
 });
 
@@ -203,6 +213,7 @@ app.get('/config/full', (req, res) => {
     dashboardPasswordHash: undefined,
     providerCount: cfg.providers ? cfg.providers.length : 0,
     version:       APP_VERSION,
+    commit:        GIT_COMMIT,
   });
 });
 
@@ -210,6 +221,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'rotationThreshold', 'maxPerMinute', 'keyInjectMode',
   'keyInjectParam', 'keyInjectHeader', 'providers', 'proxyAuthToken',
   'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
+  'rotationMode', 'roundRobinSwitchLimit',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────

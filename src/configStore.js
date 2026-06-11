@@ -16,6 +16,8 @@ const DEFAULTS = {
   rotationThreshold: 32,
   maxPerMinute:      35,
   rotationIntervalMin: 60,
+  rotationMode:      'time',
+  roundRobinSwitchLimit: 1,
   keyInjectMode:     'bearer',
   keyInjectParam:    'api_key',
   keyInjectHeader:   'X-API-Key',
@@ -169,6 +171,8 @@ function save(config) {
   merged.rotationThreshold = parseInt(merged.rotationThreshold, 10) || 32;
   merged.maxPerMinute      = parseInt(merged.maxPerMinute,      10) || 35;
   merged.rotationIntervalMin = parseInt(merged.rotationIntervalMin, 10) >= 0 ? parseInt(merged.rotationIntervalMin, 10) : 60;
+  merged.rotationMode      = ['time', 'round-robin', 'threshold'].includes(merged.rotationMode) ? merged.rotationMode : 'time';
+  merged.roundRobinSwitchLimit = parseInt(merged.roundRobinSwitchLimit, 10) >= 1 ? parseInt(merged.roundRobinSwitchLimit, 10) : 1;
   if (!merged.proxyAuthToken)      merged.proxyAuthToken     = generateToken();
   if (!merged.anthropicProxyToken) merged.anthropicProxyToken = generateToken();
   if (!merged.googleProxyToken)    merged.googleProxyToken    = generateToken();
