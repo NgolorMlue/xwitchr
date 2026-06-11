@@ -47,7 +47,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -184,6 +184,7 @@ app.get('/config', (req, res) => {
   res.json({
     rotationThreshold: cfg.rotationThreshold,
     maxPerMinute:      cfg.maxPerMinute,
+    rotationIntervalMin: cfg.rotationIntervalMin !== undefined ? cfg.rotationIntervalMin : 60,
     keyInjectMode:     cfg.keyInjectMode,
     keyInjectParam:    cfg.keyInjectParam,
     keyInjectHeader:   cfg.keyInjectHeader,
@@ -208,7 +209,7 @@ app.get('/config/full', (req, res) => {
 const CONFIG_ALLOWED_KEYS = new Set([
   'rotationThreshold', 'maxPerMinute', 'keyInjectMode',
   'keyInjectParam', 'keyInjectHeader', 'providers', 'proxyAuthToken',
-  'anthropicProxyToken', 'googleProxyToken', 'apiModes',
+  'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────

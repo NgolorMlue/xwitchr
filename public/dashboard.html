@@ -795,6 +795,11 @@
             <div class="form-hint">Provider's real limit</div>
           </div>
         </div>
+        <div class="form-group" style="margin-top: 12px;">
+          <label class="form-label" for="rotationIntervalMin">Rotation Interval (minutes)</label>
+          <input class="form-input" id="rotationIntervalMin" type="number" min="0" max="99999" placeholder="60" />
+          <div class="form-hint">Keep the same key active for this duration before switching (0 for round-robin)</div>
+        </div>
         <div style="margin-top:14px;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px">
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">EFFECTIVE CAPACITY</div>
           <div class="effective-cap-badge" id="capBadge">— req/min</div>
@@ -3329,6 +3334,7 @@ async function loadConfig(){
     if (gooTok) gooTok.value = cfg.googleProxyToken    || '';
     document.getElementById('rotationThreshold').value=cfg.rotationThreshold||32;
     document.getElementById('maxPerMinute').value=cfg.maxPerMinute||35;
+    document.getElementById('rotationIntervalMin').value=cfg.rotationIntervalMin !== undefined ? cfg.rotationIntervalMin : 60;
     document.getElementById('keyInjectMode').value=cfg.keyInjectMode||'bearer';
     document.getElementById('keyInjectParam').value=cfg.keyInjectParam||'api_key';
     document.getElementById('keyInjectHeader').value=cfg.keyInjectHeader||'X-API-Key';
@@ -4030,6 +4036,7 @@ async function saveConfig(){
     googleProxyToken:    document.getElementById('googleProxyToken')?.value    || '',
     rotationThreshold: parseInt(document.getElementById('rotationThreshold').value)||32,
     maxPerMinute:      parseInt(document.getElementById('maxPerMinute').value)||35,
+    rotationIntervalMin: parseInt(document.getElementById('rotationIntervalMin').value) >= 0 ? parseInt(document.getElementById('rotationIntervalMin').value) : 60,
     keyInjectMode:     document.getElementById('keyInjectMode').value,
     keyInjectParam:    document.getElementById('keyInjectParam').value.trim()||'api_key',
     keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',

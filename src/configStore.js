@@ -15,6 +15,7 @@ const DEFAULTS = {
   googleProxyToken:     '',
   rotationThreshold: 32,
   maxPerMinute:      35,
+  rotationIntervalMin: 60,
   keyInjectMode:     'bearer',
   keyInjectParam:    'api_key',
   keyInjectHeader:   'X-API-Key',
@@ -167,6 +168,7 @@ function save(config) {
   merged.providers = (merged.providers || []).map(sanitizeProvider).filter(p => p.url && p.key);
   merged.rotationThreshold = parseInt(merged.rotationThreshold, 10) || 32;
   merged.maxPerMinute      = parseInt(merged.maxPerMinute,      10) || 35;
+  merged.rotationIntervalMin = parseInt(merged.rotationIntervalMin, 10) >= 0 ? parseInt(merged.rotationIntervalMin, 10) : 60;
   if (!merged.proxyAuthToken)      merged.proxyAuthToken     = generateToken();
   if (!merged.anthropicProxyToken) merged.anthropicProxyToken = generateToken();
   if (!merged.googleProxyToken)    merged.googleProxyToken    = generateToken();

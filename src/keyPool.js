@@ -9,15 +9,17 @@ const OFFLINE_THRESHOLD = 3;
 const OFFLINE_RETRY_MS  = 60_000;
 
 class KeyPool {
-  constructor(providers, threshold = 32, maxPerMinute = 35) {
+  constructor(providers, threshold = 32, maxPerMinute = 35, rotationIntervalMin = 60) {
     this.providers    = providers;
     this.threshold    = threshold;
     this.maxPerMinute = maxPerMinute;
+    this.rotationIntervalMin = rotationIntervalMin;
     this.windows            = {};
     this.tokenWindows       = {};
     this.modelWindows       = {};  // `${provId}::${model}` → [timestamps]
     this.modelTokenWindows  = {};  // `${provId}::${model}` → [{ts,n}]
     this.currentIndex            = 0;
+    this.lastRotationTime        = Date.now();
     this.consecutiveFailures     = {};
     this.lastFailureTime         = {};
 
@@ -132,6 +134,16 @@ class KeyPool {
     );
     if (!anyEligible) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
 
+    // Trigger time-based rotation check at the start of selection (top-level invocation only)
+    if (depth === 0 && this.rotationIntervalMin > 0 && total > 1) {
+      const elapsed = Date.now() - this.lastRotationTime;
+      const intervalMs = this.rotationIntervalMin * 60_000;
+      if (elapsed >= intervalMs) {
+        this.currentIndex = (this.currentIndex + 1) % total;
+        this.lastRotationTime = Date.now();
+      }
+    }
+
     // Pass 1: healthy (not offline) providers
     for (let attempt = 0; attempt < total; attempt++) {
       const idx = (this.currentIndex + attempt) % total;
@@ -148,10 +160,20 @@ class KeyPool {
       const count = this._count(p);
       if (count >= this.threshold) {
         this.currentIndex = (this.currentIndex + 1) % total;
+        this.lastRotationTime = Date.now();
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
-      this.currentIndex = (idx + 1) % total;
+      if (this.rotationIntervalMin > 0) {
+        // Time-based rotation: stick to this provider, reset timer only on failover transition
+        if (idx !== this.currentIndex) {
+          this.currentIndex = idx;
+          this.lastRotationTime = Date.now();
+        }
+      } else {
+        // Round-robin: rotate immediately on every request
+        this.currentIndex = (idx + 1) % total;
+      }
       return p;
     }
 
@@ -166,7 +188,14 @@ class KeyPool {
       if (excludeSet && excludeSet.has(id)) continue;
       if (!this._supportsModel(p, model)) continue;
       if (!this._isRateLimited(p, model)) {
-        this.currentIndex = (idx + 1) % total;
+        if (this.rotationIntervalMin > 0) {
+          if (idx !== this.currentIndex) {
+            this.currentIndex = idx;
+            this.lastRotationTime = Date.now();
+          }
+        } else {
+          this.currentIndex = (idx + 1) % total;
+        }
         return p;
       }
     }
