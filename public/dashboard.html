@@ -566,6 +566,10 @@
       <div style="display: flex; align-items: center; gap: 8px;">
         <button class="icon-btn" onclick="toggleAdvancedFilterPanel()" id="advFilterToggleBtn">⚙️ Advanced Filters</button>
         <button class="icon-btn" onclick="toggleLogFullscreen()" id="fullscreenLogBtn">🖥️ Fullscreen</button>
+        <label style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; white-space: nowrap;">
+          <input type="checkbox" id="hideUnsupportedFilter" onchange="filterLogs()" checked style="width: 13px; height: 13px; accent-color: var(--accent); cursor: pointer;" />
+          <span>Hide Unsupported</span>
+        </label>
         <input id="logSearchInput" type="text" placeholder="Search path / provider..." 
           style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:12px; padding:4px 10px; outline:none; width: 180px;" oninput="filterLogs()" />
         <select id="logStatusFilter" style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:12px; padding:4px 6px; outline:none; cursor: pointer;" onchange="filterLogs()">
@@ -2499,10 +2503,17 @@ function renderLogsTable() {
 
   const searchInput = document.getElementById('logSearchInput');
   const statusFilterEl = document.getElementById('logStatusFilter');
+  const hideUnsupportedEl = document.getElementById('hideUnsupportedFilter');
   const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
   const statusFilter = statusFilterEl ? statusFilterEl.value : 'all';
+  const hideUnsupported = hideUnsupportedEl ? hideUnsupportedEl.checked : false;
 
   const filtered = _activeLogs.filter(e => {
+    if (hideUnsupported) {
+      const cleanPath = e.path ? e.path.replace(/^\/(proxy|v1)/, '') : '';
+      if (['/props', '/slots', '/metrics'].includes(cleanPath)) return false;
+    }
+
     const matchQuery = !searchQuery || 
       (e.path && e.path.toLowerCase().includes(searchQuery)) || 
       (e.urlHint && e.urlHint.toLowerCase().includes(searchQuery)) ||

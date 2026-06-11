@@ -151,6 +151,7 @@ class KeyPool {
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
+      this.currentIndex = (idx + 1) % total;
       return p;
     }
 
@@ -164,7 +165,10 @@ class KeyPool {
       if (requiredType && (p.type || 'openai') !== requiredType) continue;
       if (excludeSet && excludeSet.has(id)) continue;
       if (!this._supportsModel(p, model)) continue;
-      if (!this._isRateLimited(p, model)) return p;
+      if (!this._isRateLimited(p, model)) {
+        this.currentIndex = (idx + 1) % total;
+        return p;
+      }
     }
 
     throw new Error('ALL_KEYS_EXHAUSTED');

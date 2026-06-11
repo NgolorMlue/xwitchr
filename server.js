@@ -507,6 +507,29 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
     requestedModel = String(req.body.model);
   }
 
+  const cleanPath = req.path.replace(/^\/(proxy|v1)/, '');
+  if (['/props', '/slots', '/metrics'].includes(cleanPath)) {
+    const responseTime = Date.now() - startTime;
+    reqLogger.log({
+      method: req.method,
+      path: req.path,
+      keyHint: '—',
+      urlHint: '—',
+      status: 404,
+      responseTime,
+      error: `Endpoint ${req.path} is not supported by this router.`,
+      payload: reqPayloadStr,
+      model: requestedModel,
+      ip: clientIp,
+      userAgent: clientUserAgent,
+      tokens: null
+    });
+    return res.status(404).json({
+      error: 'Not Found',
+      message: `Endpoint ${req.path} is not supported by this router.`
+    });
+  }
+
   while (attempts < maxAttempts) {
     let provider = null;
     let keyHint = '?';
