@@ -18,7 +18,7 @@ class RequestLogger {
     this.maxEntries = maxEntries;
     this.entries = [];       // newest first
     this._ws = null;         // write stream
-    this._tokenStats = { totalTokens: 0, totalPrompt: 0, totalCompletion: 0, totalRequests: 0 };
+    this._tokenStats = { totalTokens: 0, totalPrompt: 0, totalCompletion: 0, totalRequests: 0, models: {} };
     this._statsDirty = false;
     this._statsFlushTimer = null;
 
@@ -68,6 +68,7 @@ class RequestLogger {
           totalPrompt:     raw.totalPrompt     || 0,
           totalCompletion: raw.totalCompletion || 0,
           totalRequests:   raw.totalRequests   || 0,
+          models:          raw.models          || {},
         };
         console.log(`[Logger] Token stats loaded — ${this._tokenStats.totalTokens.toLocaleString()} total tokens across ${this._tokenStats.totalRequests.toLocaleString()} requests`);
       }
@@ -130,19 +131,31 @@ class RequestLogger {
       this._ws.write(JSON.stringify(entry) + '\n');
     }
 
-    // Accumulate all-time token stats
+    // Accumulate all-time global + per-model token stats
     this._tokenStats.totalRequests++;
     if (tokens) {
       this._tokenStats.totalTokens     += tokens.total      || 0;
       this._tokenStats.totalPrompt     += tokens.prompt     || 0;
       this._tokenStats.totalCompletion += tokens.completion || 0;
     }
+    if (model) {
+      if (!this._tokenStats.models[model]) {
+        this._tokenStats.models[model] = { totalTokens: 0, totalPrompt: 0, totalCompletion: 0, totalRequests: 0 };
+      }
+      const ms = this._tokenStats.models[model];
+      ms.totalRequests++;
+      if (tokens) {
+        ms.totalTokens     += tokens.total      || 0;
+        ms.totalPrompt     += tokens.prompt     || 0;
+        ms.totalCompletion += tokens.completion || 0;
+      }
+    }
     this._statsDirty = true;
     this._scheduleStatsFlush();
   }
 
   getTokenStats() {
-    return { ...this._tokenStats };
+    return this._tokenStats;
   }
 
   /**

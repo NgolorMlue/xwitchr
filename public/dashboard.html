@@ -103,7 +103,7 @@
     .pill-exhausted{background:rgba(239,68,68,.1);color:var(--red)}
 
     /* ── Log Table ── */
-    .log-wrap{overflow:auto;max-height:300px;border-radius:8px;border:1px solid var(--border)}
+    .log-wrap{overflow:auto;max-height:calc(100vh - 260px);min-height:420px;border-radius:8px;border:1px solid var(--border)}
     table{width:100%;border-collapse:collapse;font-size:12px}
     thead th{position:sticky;top:0;background:var(--surface2);padding:10px 14px;text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);border-bottom:1px solid var(--border);white-space:nowrap}
     tbody tr{border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
@@ -577,7 +577,7 @@
 <div class="page fade-in" id="page-log">
 
   <!-- Log -->
-  <div class="card" id="logCard">
+  <div class="card" id="logCard" style="padding-bottom:24px">
     <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
       <div class="section-title">Request Log</div>
       <div style="display: flex; align-items: center; gap: 8px;">
@@ -1168,11 +1168,11 @@
       <!-- Row 1: primary stats -->
       <div class="am-stat-grid">
         <div class="am-stat">
-          <div class="am-stat-label">Total Requests</div>
+          <div class="am-stat-label">Total Requests (All Time)</div>
           <div class="am-stat-value c-accent" id="amTotalRequests">—</div>
         </div>
         <div class="am-stat">
-          <div class="am-stat-label">Total Tokens</div>
+          <div class="am-stat-label">Total Tokens (All Time)</div>
           <div class="am-stat-value c-yellow" id="amTotalTokens">—</div>
           <div class="am-stat-sub" id="amTokenBreakdown">P: — · C: —</div>
         </div>
@@ -1991,6 +1991,7 @@ function renderKey(k) {
 let _currentToken = '';
 let _poolKeys = [];
 let _modelsTabAliveState = {};
+let _serverTokenStats = null; // all-time stats from /status
 
 async function fetchStatus() {
   const overlay = document.getElementById('loginOverlay');
@@ -2037,6 +2038,7 @@ async function fetchStatus() {
 
     // All-time token stats from server (not capped by in-memory log window)
     if (d.tokenStats) {
+      _serverTokenStats = d.tokenStats;
       const ts = d.tokenStats;
       const monTok = document.getElementById('statMonitorTokens');
       const monBreak = document.getElementById('statMonitorTokensBreakdown');
@@ -3456,17 +3458,25 @@ function openModelAnalytics(modelName) {
   const topProvider = Object.entries(providerCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
   const providersUsed = Object.keys(providerCount).length;
 
+  // Use server-side all-time per-model stats when available
+  const srvModel = _serverTokenStats?.models?.[modelName];
+  const allTimeTokens     = srvModel ? srvModel.totalTokens     : totalTokens;
+  const allTimePrompt     = srvModel ? srvModel.totalPrompt     : totalPrompt;
+  const allTimeCompletion = srvModel ? srvModel.totalCompletion : totalCompletion;
+  const allTimeRequests   = srvModel ? srvModel.totalRequests   : totalRequests;
+
   // — Populate stats —
-  document.getElementById('amTotalRequests').textContent  = totalRequests || '—';
-  document.getElementById('amTotalTokens').textContent    = totalTokens > 0 ? formatTokenCount(totalTokens) : '—';
-  document.getElementById('amTokenBreakdown').textContent = totalTokens > 0 ? `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}` : 'no token data';
+  document.getElementById('amTotalRequests').textContent  = allTimeRequests || '—';
+  document.getElementById('amTotalTokens').textContent    = allTimeTokens > 0 ? formatTokenCount(allTimeTokens) : '—';
+  document.getElementById('amTokenBreakdown').textContent = allTimeTokens > 0 ? `P: ${formatTokenCount(allTimePrompt)} · C: ${formatTokenCount(allTimeCompletion)}` : 'no token data';
   document.getElementById('amAvgLatency').textContent     = avgLatency > 0 ? avgLatency + 'ms' : '—';
   document.getElementById('amConnectedApps').textContent  = appSet.size || '—';
   document.getElementById('amConnectedIps').textContent   = ipSet.size > 0 ? `${ipSet.size} unique IP${ipSet.size !== 1 ? 's' : ''}` : 'no IP data';
   document.getElementById('amSuccessRate').textContent    = totalRequests > 0 ? successRate + '%' : '—';
   document.getElementById('amErrorRate').textContent      = totalRequests > 0 ? errorRate + '%' : '—';
   document.getElementById('amPeakRpm').textContent        = peakRpm || '—';
-  document.getElementById('amTokensPerReq').textContent   = tokensPerReq > 0 ? formatTokenCount(tokensPerReq) : '—';
+  const allTimeTokensPerReq = allTimeRequests > 0 ? Math.round(allTimeTokens / allTimeRequests) : 0;
+  document.getElementById('amTokensPerReq').textContent   = allTimeTokensPerReq > 0 ? formatTokenCount(allTimeTokensPerReq) : '—';
   document.getElementById('amLastSeen').textContent       = lastSeen ? new Date(lastSeen).toLocaleString() : '—';
   document.getElementById('amTopProvider').textContent    = topProvider;
   document.getElementById('amProvidersUsed').textContent  = providersUsed || '—';
