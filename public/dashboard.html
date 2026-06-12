@@ -284,6 +284,18 @@
     .modal-close:hover{color:var(--text)}
     .modal-body{flex:1;overflow-y:auto;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
     .modal-foot{padding:14px 22px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px}
+    .am-modal-box{background:var(--surface);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:860px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.6)}
+    .am-stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+    .am-stat{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px}
+    .am-stat-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);margin-bottom:4px}
+    .am-stat-value{font-size:20px;font-weight:700;line-height:1.1}
+    .am-stat-sub{font-size:10px;color:var(--text-dim);margin-top:3px;font-family:var(--font-mono)}
+    .am-log-table{width:100%;border-collapse:collapse;font-size:11px}
+    .am-log-table thead tr{background:var(--surface2);position:sticky;top:0}
+    .am-log-table th{padding:6px 10px;text-align:left;color:var(--text-muted);font-weight:600;border-bottom:1px solid var(--border)}
+    .am-log-table td{padding:5px 10px;border-bottom:1px solid var(--border);color:var(--text-muted)}
+    .am-log-table tr:last-child td{border-bottom:none}
+    .am-log-table tr:hover td{background:var(--surface2)}
 
     .model-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
     .model-search{flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'Inter',sans-serif;font-size:13px;padding:8px 12px;outline:none;transition:border-color .15s,box-shadow .15s}
@@ -442,6 +454,11 @@
       <div class="stat-label">Exhausted</div>
       <div class="stat-value c-red" id="statExhausted">—</div>
       <div class="stat-sub">at hard cap</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Total Tokens</div>
+      <div class="stat-value c-accent" id="statMonitorTokens">—</div>
+      <div class="stat-sub" id="statMonitorTokensBreakdown">all recorded</div>
     </div>
   </div>
 
@@ -739,10 +756,11 @@
             <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
             <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
             <th style="text-align:center">Alive</th>
+            <th style="text-align:center">Analytics</th>
           </tr>
         </thead>
         <tbody id="modelTabBody">
-          <tr><td colspan="8" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
+          <tr><td colspan="9" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
         </tbody>
       </table>
     </div>
@@ -819,26 +837,6 @@
           <div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">EFFECTIVE CAPACITY</div>
           <div class="effective-cap-badge" id="capBadge">— req/min</div>
           <div style="font-size:11px;color:var(--text-dim);margin-top:8px" id="capExplain">—</div>
-        </div>
-      </div>
-
-      <!-- System Info & Update -->
-      <div class="card" style="margin-top: 14px;">
-        <div class="section-header"><div class="section-title">ℹ️ System &amp; Updates</div></div>
-        <div style="display:flex; flex-direction:column; gap:10px;">
-          <div style="display:flex; align-items:center; justify-content:space-between;">
-            <span style="color:var(--text-muted); font-size:12px;">App Name</span>
-            <span style="font-weight:600; color:var(--text); font-size:12px;">XWITCHR</span>
-          </div>
-          <div style="display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--border); padding-bottom:10px;">
-            <span style="color:var(--text-muted); font-size:12px;">Version</span>
-            <span style="font-family:var(--font-mono); font-weight:600; color:var(--accent); font-size:12px;" id="appVersionDisplay">v1.0.0</span>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px; margin-top:4px;">
-            <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="width:100%; font-weight:600; font-size:12px; padding: 8px 14px;">🔄 Update App from GitHub</button>
-            <div id="updateStatusText" class="form-hint" style="text-align:center; min-height:16px; margin:0; color:var(--text-muted); font-size:11px; line-height:1.4;"></div>
-            <pre id="updateLogOutput" style="display:none; background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:8px; font-family:var(--font-mono); font-size:10px; color:var(--text-muted); max-height:150px; overflow-y:auto; white-space:pre-wrap; word-break:break-all; margin-top:8px; text-align:left;"></pre>
-          </div>
         </div>
       </div>
 
@@ -1053,6 +1051,48 @@
       </div>
 
     </div>
+
+    <!-- Row 3: System & Updates -->
+    <div class="card" style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0;padding:0;overflow:hidden">
+
+      <!-- Left: App identity -->
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div style="width:40px;height:40px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0">⚡</div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text)">XWITCHR</div>
+            <div style="font-size:11px;color:var(--text-muted)">API Key Router &amp; Proxy Gateway</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;font-size:12px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-muted)">Version</span>
+            <span style="font-family:var(--font-mono);font-weight:700;color:var(--accent);background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);border-radius:5px;padding:1px 8px" id="appVersionDisplay">v1.0.0</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-muted)">Creator</span>
+            <span style="font-weight:600;color:var(--text)">Mlue</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="color:var(--text-muted)">Source</span>
+            <span style="font-family:var(--font-mono);color:var(--text-muted)">GitHub</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Divider -->
+      <div style="background:var(--border);margin:16px 0"></div>
+
+      <!-- Right: Update controls -->
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">System Updates</div>
+        <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%">🔄 Update App from GitHub</button>
+        <div id="updateStatusText" style="font-size:11px;color:var(--text-muted);min-height:14px;line-height:1.5;text-align:center"></div>
+        <pre id="updateLogOutput" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
+      </div>
+
+    </div>
+
   </div>
 </div>
 
@@ -1109,6 +1149,116 @@
       <button class="icon-btn" onclick="closeModelModal()">Cancel</button>
       <div style="flex:1"></div>
       <div class="model-stats" id="modalSaveHint">Empty selection = allow all models</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODEL ANALYTICS MODAL ══ -->
+<div id="modelAnalyticsModal" class="modal-overlay" style="display:none" onclick="closeModelAnalytics()">
+  <div class="am-modal-box" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div>
+        <div class="modal-title">📊 Model Analytics</div>
+        <div class="modal-subtitle" id="amModelName" style="font-size:13px;color:var(--accent)">—</div>
+      </div>
+      <button class="modal-close" onclick="closeModelAnalytics()">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <!-- Row 1: primary stats -->
+      <div class="am-stat-grid">
+        <div class="am-stat">
+          <div class="am-stat-label">Total Requests</div>
+          <div class="am-stat-value c-accent" id="amTotalRequests">—</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Total Tokens</div>
+          <div class="am-stat-value c-yellow" id="amTotalTokens">—</div>
+          <div class="am-stat-sub" id="amTokenBreakdown">P: — · C: —</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Avg Latency</div>
+          <div class="am-stat-value c-purple" id="amAvgLatency">—</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Connected Apps</div>
+          <div class="am-stat-value c-green" id="amConnectedApps">—</div>
+          <div class="am-stat-sub" id="amConnectedIps">unique IPs</div>
+        </div>
+      </div>
+
+      <!-- Row 2: secondary stats -->
+      <div class="am-stat-grid">
+        <div class="am-stat">
+          <div class="am-stat-label">Success Rate</div>
+          <div class="am-stat-value c-green" id="amSuccessRate">—</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Error Rate</div>
+          <div class="am-stat-value c-red" id="amErrorRate">—</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Peak RPM</div>
+          <div class="am-stat-value c-accent" id="amPeakRpm">—</div>
+        </div>
+        <div class="am-stat">
+          <div class="am-stat-label">Tokens / Request</div>
+          <div class="am-stat-value c-yellow" id="amTokensPerReq">—</div>
+        </div>
+      </div>
+
+      <!-- Meta row -->
+      <div style="display:flex;gap:20px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);padding:2px 0">
+        <span>Last seen: <strong id="amLastSeen" style="color:var(--text)">—</strong></span>
+        <span>Top provider: <strong id="amTopProvider" style="color:var(--accent);font-family:var(--font-mono)">—</strong></span>
+        <span>Providers used: <strong id="amProvidersUsed" style="color:var(--text)">—</strong></span>
+        <span>P95 latency: <strong id="amP95Latency" style="color:var(--purple)">—</strong></span>
+      </div>
+
+      <!-- Chart -->
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:14px">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted)">Requests · Latency · Tokens over time</div>
+          <select id="amChartBucket" onchange="rebuildAnalyticsChart()" style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:11px;padding:3px 8px;outline:none;cursor:pointer">
+            <option value="60000">1-min buckets</option>
+            <option value="300000">5-min buckets</option>
+            <option value="3600000">1-hour buckets</option>
+          </select>
+        </div>
+        <div style="position:relative;height:170px"><canvas id="amChart"></canvas></div>
+      </div>
+
+      <!-- Recent logs -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px">
+          <div style="font-size:11px;font-weight:600;color:var(--text-muted)" id="amLogsCount">Recent Requests</div>
+          <input id="amClientSearch" type="text" placeholder="Filter by client IP or user-agent…"
+            oninput="filterAmLogs()"
+            style="background:var(--surface2);border:1px solid var(--border2);border-radius:6px;color:var(--text);font-size:11px;padding:4px 10px;outline:none;width:240px;flex-shrink:0" />
+        </div>
+        <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:8px">
+          <table class="am-log-table">
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th style="text-align:center">Status</th>
+                <th style="text-align:right">Latency</th>
+                <th style="text-align:right">Tokens</th>
+                <th>Provider</th>
+                <th>Client</th>
+                <th style="width:36px"></th>
+              </tr>
+            </thead>
+            <tbody id="amLogsBody">
+              <tr><td colspan="7" style="padding:12px;text-align:center;color:var(--text-dim)">No logs for this model</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot" style="justify-content:flex-end">
+      <button class="icon-btn" onclick="closeModelAnalytics()">Close</button>
     </div>
   </div>
 </div>
@@ -1536,7 +1686,7 @@ function renderModelsTab() {
   });
 
   if (filteredRows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="empty-row">No models found matching filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">No models found matching filters.</td></tr>';
     return;
   }
 
@@ -1576,6 +1726,8 @@ function renderModelsTab() {
     const safeProviders = JSON.stringify(row.supporting).replace(/"/g, '&quot;');
     const provBtn = `<button onclick="showProviderPopup(this,'${escHtml(row.name)}',${safeProviders})"
       style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provBtnColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provBtnLabel}</button>`;
+    const analyticsBtn = `<button onclick="openModelAnalytics('${safeModelName}')"
+      style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:5px;color:var(--purple);font-size:10px;font-weight:600;padding:2px 8px;cursor:pointer;white-space:nowrap">📊 View</button>`;
     return `<tr data-model="${escHtml(row.name)}">
       <td style="text-align:center">${checkboxHtml}</td>
       <td style="font-family:var(--font-mono);color:var(--text);font-weight:500">${escHtml(row.name)}</td>
@@ -1585,6 +1737,7 @@ function renderModelsTab() {
       <td style="text-align:center" class="${sc}">${scText}</td>
       <td style="text-align:center">${provBtn}</td>
       <td style="text-align:center">${aliveColumn}</td>
+      <td style="text-align:center">${analyticsBtn}</td>
     </tr>`;
   }).join('');
 }
@@ -1808,15 +1961,16 @@ function barColor(s) {
   return s==='exhausted'?'var(--red)':s==='near-limit'?'var(--yellow)':'var(--green)';
 }
 function pill(k) {
-  if(k.status==='offline')   return '<span class="pill pill-exhausted" style="background:rgba(239,68,68,.15);border:1px solid var(--red);animation:pulse 1.5s infinite">⚠️ Offline</span>';
-  if(k.isCurrent)            return '<span class="pill pill-active">● Active</span>';
-  if(k.status==='exhausted') return '<span class="pill pill-exhausted">Exhausted</span>';
-  if(k.status==='near-limit')return '<span class="pill pill-near">Near Limit</span>';
+  if(k.status==='offline')              return '<span class="pill pill-exhausted" style="background:rgba(239,68,68,.15);border:1px solid var(--red);animation:pulse 1.5s infinite">⚠️ Offline</span>';
+  if(k.isLatestRequest)                 return '<span class="pill pill-active">● Active</span>';
+  if(k.status==='exhausted')            return '<span class="pill pill-exhausted">Exhausted</span>';
+  if(k.status==='near-limit')           return '<span class="pill pill-near">Near Limit</span>';
+  if(k.requestsLastMinute > 0)          return '<span class="pill pill-healthy" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3)">▶ Running</span>';
   return '<span class="pill pill-healthy">Healthy</span>';
 }
 function renderKey(k) {
   const pct = Math.min(100, Math.round(k.requestsLastMinute/k.maxPerMinute*100));
-  const cls = k.status==='offline'?'is-exhausted':k.isCurrent?'is-current':k.status==='near-limit'?'is-near':k.status==='exhausted'?'is-exhausted':'';
+  const cls = k.status==='offline'?'is-exhausted':k.isLatestRequest?'is-current':k.status==='near-limit'?'is-near':k.status==='exhausted'?'is-exhausted':'';
   return `<div class="key-item ${cls}">
     <div class="key-idx">#${k.index+1}</div>
     <div class="key-info">
@@ -1880,6 +2034,15 @@ async function fetchStatus() {
     document.getElementById('capPct').textContent=pct;
     document.getElementById('bigBar').style.width=pct+'%';
     document.getElementById('poolSummary').textContent=`${healthy} healthy · ${near} near · ${exhausted} exhausted`;
+
+    // Mark the provider that received the latest logged request
+    if (_activeLogs.length > 0) {
+      const latest = _activeLogs.reduce((a, b) => new Date(a.timestamp) > new Date(b.timestamp) ? a : b);
+      keys.forEach(k => {
+        k.isLatestRequest = k.keyHint === latest.keyHint && k.urlHint === latest.urlHint;
+      });
+    }
+
     document.getElementById('keyGrid').innerHTML=keys.map(renderKey).join('');
     _poolKeys = keys;
     renderModelsTab();
@@ -2520,10 +2683,20 @@ function updateAggregateStats() {
 
   const tokensEl = document.getElementById('statTokens');
   if (tokensEl) tokensEl.textContent = formatTokenCount(totalTokens);
-  
+
   const breakdownEl = document.getElementById('statTokensBreakdown');
   if (breakdownEl) {
     breakdownEl.textContent = `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}`;
+  }
+
+  const monitorTokensEl = document.getElementById('statMonitorTokens');
+  if (monitorTokensEl) monitorTokensEl.textContent = totalTokens > 0 ? formatTokenCount(totalTokens) : '—';
+
+  const monitorBreakdownEl = document.getElementById('statMonitorTokensBreakdown');
+  if (monitorBreakdownEl) {
+    monitorBreakdownEl.textContent = totalTokens > 0
+      ? `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}`
+      : 'all recorded';
   }
 }
 
@@ -3144,15 +3317,12 @@ async function modelsTabSaveSelection() {
   saveBtn.disabled = false;
 }
 
-function openLogInspector(idx) {
-  const log = _activeLogs[idx];
-  if (!log) return;
-
+function _fillLogInspector(log) {
   document.getElementById('inspectTimestamp').textContent = new Date(log.timestamp).toLocaleString();
   document.getElementById('inspectMethod').textContent = log.method || 'GET';
   document.getElementById('inspectModel').textContent = log.model || '—';
   document.getElementById('inspectPath').textContent = log.path || '/';
-  
+
   const statusEl = document.getElementById('inspectStatus');
   const status = log.status || 'ERR';
   statusEl.textContent = status;
@@ -3161,21 +3331,18 @@ function openLogInspector(idx) {
   document.getElementById('inspectLatency').textContent = log.responseTime ? `${log.responseTime}ms` : '—';
   document.getElementById('inspectProvider').textContent = log.urlHint || '—';
   document.getElementById('inspectKeyHint').textContent = log.keyHint || '—';
-  
   document.getElementById('inspectClientIp').textContent = log.ip || '—';
   document.getElementById('inspectUserAgent').textContent = log.userAgent || '—';
-  
+
   const tokensEl = document.getElementById('inspectTokens');
   if (log.tokens) {
     tokensEl.textContent = `${log.tokens.total} (Prompt: ${log.tokens.prompt} · Completion: ${log.tokens.completion})`;
   } else {
     tokensEl.textContent = '—';
   }
-  
+
   const payloadBox = document.getElementById('inspectPayload');
-  if (payloadBox) {
-    payloadBox.textContent = log.payload || 'No payload (GET/DELETE request).';
-  }
+  if (payloadBox) payloadBox.textContent = log.payload || 'No payload (GET/DELETE request).';
 
   const errBox = document.getElementById('inspectError');
   if (log.error) {
@@ -3185,7 +3352,19 @@ function openLogInspector(idx) {
     errBox.textContent = 'Request completed successfully without errors.';
     errBox.style.color = 'var(--text-muted)';
   }
+}
 
+function openLogInspector(idx) {
+  const log = _activeLogs[idx];
+  if (!log) return;
+  _fillLogInspector(log);
+  document.getElementById('logInspectorModal').style.display = 'flex';
+}
+
+function openLogInspectorFromAm(idx) {
+  const log = _amCurrentLogs[idx];
+  if (!log) return;
+  _fillLogInspector(log);
   document.getElementById('logInspectorModal').style.display = 'flex';
 }
 
@@ -3197,12 +3376,274 @@ function closeLogInspector() {
   if (btn) btn.textContent = '🔍 Expand';
 }
 
-function copyInspectPayload() {
+// ════════════════════════════════════════════════════════════
+// MODEL ANALYTICS MODAL
+// ════════════════════════════════════════════════════════════
+let _amChart = null;
+let _amModelName = null;
+let _amAllLogs = [];
+let _amCurrentLogs = [];
+
+function openModelAnalytics(modelName) {
+  _amModelName = modelName;
+  document.getElementById('amModelName').textContent = modelName;
+
+  const logs = _activeLogs.filter(l => l.model === modelName);
+
+  // — Core stats —
+  let totalRequests = logs.length;
+  let totalPrompt = 0, totalCompletion = 0, totalTokens = 0;
+  let totalLatency = 0, successCount = 0, errorCount = 0;
+  let latencies = [];
+  const appSet = new Set(), ipSet = new Set();
+  const providerCount = {}, lastSeenTs = 0;
+  let lastSeen = null;
+
+  logs.forEach(l => {
+    if (l.tokens) {
+      totalPrompt     += l.tokens.prompt     || 0;
+      totalCompletion += l.tokens.completion || 0;
+      totalTokens     += l.tokens.total      || 0;
+    }
+    if (l.status && l.status >= 200 && l.status < 400 && l.responseTime) {
+      totalLatency += l.responseTime;
+      successCount++;
+      latencies.push(l.responseTime);
+    }
+    if (l.status && (l.status >= 400 || l.status < 200)) errorCount++;
+    if (l.ip) {
+      const key = `${l.ip}::${l.userAgent || ''}`;
+      appSet.add(key);
+      ipSet.add(l.ip);
+    }
+    if (l.urlHint) providerCount[l.urlHint] = (providerCount[l.urlHint] || 0) + 1;
+    if (l.timestamp) {
+      const t = new Date(l.timestamp).getTime();
+      if (!lastSeen || t > new Date(lastSeen).getTime()) lastSeen = l.timestamp;
+    }
+  });
+
+  const avgLatency = successCount > 0 ? Math.round(totalLatency / successCount) : 0;
+  const successRate = totalRequests > 0 ? Math.round(successCount / totalRequests * 100) : 0;
+  const errorRate   = totalRequests > 0 ? Math.round(errorCount  / totalRequests * 100) : 0;
+  const tokensPerReq = totalRequests > 0 ? Math.round(totalTokens / totalRequests) : 0;
+
+  // Peak RPM — bucket by 1-minute windows
+  const minuteBuckets = {};
+  logs.forEach(l => {
+    if (!l.timestamp) return;
+    const bucket = Math.floor(new Date(l.timestamp).getTime() / 60000);
+    minuteBuckets[bucket] = (minuteBuckets[bucket] || 0) + 1;
+  });
+  const peakRpm = Object.values(minuteBuckets).reduce((a, b) => Math.max(a, b), 0);
+
+  // P95 latency
+  latencies.sort((a, b) => a - b);
+  const p95 = latencies.length > 0 ? latencies[Math.floor(latencies.length * 0.95)] : 0;
+
+  // Top provider
+  const topProvider = Object.entries(providerCount).sort((a, b) => b[1] - a[1])[0]?.[0] || '—';
+  const providersUsed = Object.keys(providerCount).length;
+
+  // — Populate stats —
+  document.getElementById('amTotalRequests').textContent  = totalRequests || '—';
+  document.getElementById('amTotalTokens').textContent    = totalTokens > 0 ? formatTokenCount(totalTokens) : '—';
+  document.getElementById('amTokenBreakdown').textContent = totalTokens > 0 ? `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}` : 'no token data';
+  document.getElementById('amAvgLatency').textContent     = avgLatency > 0 ? avgLatency + 'ms' : '—';
+  document.getElementById('amConnectedApps').textContent  = appSet.size || '—';
+  document.getElementById('amConnectedIps').textContent   = ipSet.size > 0 ? `${ipSet.size} unique IP${ipSet.size !== 1 ? 's' : ''}` : 'no IP data';
+  document.getElementById('amSuccessRate').textContent    = totalRequests > 0 ? successRate + '%' : '—';
+  document.getElementById('amErrorRate').textContent      = totalRequests > 0 ? errorRate + '%' : '—';
+  document.getElementById('amPeakRpm').textContent        = peakRpm || '—';
+  document.getElementById('amTokensPerReq').textContent   = tokensPerReq > 0 ? formatTokenCount(tokensPerReq) : '—';
+  document.getElementById('amLastSeen').textContent       = lastSeen ? new Date(lastSeen).toLocaleString() : '—';
+  document.getElementById('amTopProvider').textContent    = topProvider;
+  document.getElementById('amProvidersUsed').textContent  = providersUsed || '—';
+  document.getElementById('amP95Latency').textContent     = p95 > 0 ? p95 + 'ms' : '—';
+
+  // — Render chart —
+  _buildAmChart(logs);
+
+  // — Render recent logs —
+  _amAllLogs = [...logs].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const searchEl = document.getElementById('amClientSearch');
+  if (searchEl) searchEl.value = '';
+  _renderAmLogs();
+
+  document.getElementById('modelAnalyticsModal').style.display = 'flex';
+}
+
+function filterAmLogs() {
+  _renderAmLogs();
+}
+
+function _renderAmLogs() {
+  const query = (document.getElementById('amClientSearch')?.value || '').toLowerCase().trim();
+  const filtered = query
+    ? _amAllLogs.filter(l => (l.ip || '').toLowerCase().includes(query) || (l.userAgent || '').toLowerCase().includes(query))
+    : _amAllLogs;
+
+  _amCurrentLogs = filtered.slice(0, 50);
+
+  const countEl = document.getElementById('amLogsCount');
+  if (countEl) {
+    countEl.textContent = query
+      ? `Requests — ${_amCurrentLogs.length} match${_amCurrentLogs.length !== 1 ? 'es' : ''} (${_amAllLogs.length} total)`
+      : `Recent Requests (${_amAllLogs.length})`;
+  }
+
+  const tbody = document.getElementById('amLogsBody');
+  if (!tbody) return;
+
+  if (_amCurrentLogs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="padding:12px;text-align:center;color:var(--text-dim)">${query ? 'No requests match that client.' : 'No logs for this model'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = _amCurrentLogs.map((l, i) => {
+    const sc = !l.status ? '' : l.status < 300 ? 'color:var(--green)' : l.status < 500 ? 'color:var(--yellow)' : 'color:var(--red)';
+    const tok = l.tokens?.total ? formatTokenCount(l.tokens.total) : '—';
+    const lat = l.responseTime ? l.responseTime + 'ms' : '—';
+    const ts  = l.timestamp ? new Date(l.timestamp).toLocaleTimeString() : '—';
+    return `<tr>
+      <td style="font-family:var(--font-mono);color:var(--text-dim)">${ts}</td>
+      <td style="text-align:center;font-family:var(--font-mono);font-weight:600;${sc}">${l.status || '—'}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--purple)">${lat}</td>
+      <td style="text-align:right;font-family:var(--font-mono);color:var(--yellow)">${tok}</td>
+      <td style="font-family:var(--font-mono);color:var(--text-muted);font-size:10px">${escHtml(l.urlHint || '—')}</td>
+      <td style="font-family:var(--font-mono);color:var(--text-muted);font-size:10px">${escHtml(l.ip || '—')}</td>
+      <td style="text-align:center">
+        <button onclick="openLogInspectorFromAm(${i})" title="Inspect payload"
+          style="background:none;border:1px solid var(--border2);border-radius:4px;color:var(--text-dim);cursor:pointer;font-size:11px;padding:1px 5px;line-height:1.4" onmouseover="this.style.color='var(--text)'" onmouseout="this.style.color='var(--text-dim)'">🔍</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function _buildAmChart(logs) {
+  const bucketMs = parseInt(document.getElementById('amChartBucket')?.value || '60000', 10);
+  if (!logs || logs.length === 0) return;
+
+  // Build time buckets
+  const bucketMap = {};
+  logs.forEach(l => {
+    if (!l.timestamp) return;
+    const b = Math.floor(new Date(l.timestamp).getTime() / bucketMs) * bucketMs;
+    if (!bucketMap[b]) bucketMap[b] = { count: 0, latSum: 0, latN: 0, tokens: 0 };
+    bucketMap[b].count++;
+    if (l.responseTime && l.status >= 200 && l.status < 400) {
+      bucketMap[b].latSum += l.responseTime;
+      bucketMap[b].latN++;
+    }
+    if (l.tokens?.total) bucketMap[b].tokens += l.tokens.total;
+  });
+
+  const keys = Object.keys(bucketMap).map(Number).sort();
+  if (keys.length === 0) return;
+
+  const labels   = keys.map(k => new Date(k).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+  const reqData  = keys.map(k => bucketMap[k].count);
+  const latData  = keys.map(k => bucketMap[k].latN > 0 ? Math.round(bucketMap[k].latSum / bucketMap[k].latN) : null);
+  const tokData  = keys.map(k => bucketMap[k].tokens);
+
+  if (_amChart) { _amChart.destroy(); _amChart = null; }
+
+  const ctx = document.getElementById('amChart');
+  if (!ctx) return;
+  _amChart = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Requests',
+          data: reqData,
+          backgroundColor: 'rgba(59,130,246,.35)',
+          borderColor: 'rgba(59,130,246,.7)',
+          borderWidth: 1,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: 'Avg Latency (ms)',
+          data: latData,
+          borderColor: 'rgba(139,92,246,.9)',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          spanGaps: true,
+          yAxisID: 'y1',
+        },
+        {
+          type: 'line',
+          label: 'Tokens',
+          data: tokData,
+          borderColor: 'rgba(234,179,8,.75)',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          pointRadius: 2,
+          tension: 0.3,
+          borderDash: [4, 3],
+          yAxisID: 'y2',
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: { legend: { labels: { color: 'var(--text-muted)', font: { size: 10 }, boxWidth: 12 } } },
+      scales: {
+        x: { ticks: { color: 'var(--text-muted)', font: { size: 10 }, maxTicksLimit: 10 }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y:  { position: 'left',  title: { display: true, text: 'Requests', color: 'rgba(59,130,246,.7)', font: { size: 10 } }, ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,.05)' } },
+        y1: { position: 'right', title: { display: true, text: 'Latency ms', color: 'rgba(139,92,246,.7)', font: { size: 10 } }, ticks: { color: 'var(--text-muted)', font: { size: 10 } }, grid: { display: false } },
+        y2: { position: 'right', display: false, grid: { display: false } },
+      }
+    }
+  });
+}
+
+function rebuildAnalyticsChart() {
+  const logs = _activeLogs.filter(l => l.model === _amModelName);
+  _buildAmChart(logs);
+}
+
+function closeModelAnalytics() {
+  document.getElementById('modelAnalyticsModal').style.display = 'none';
+  if (_amChart) { _amChart.destroy(); _amChart = null; }
+  _amModelName = null;
+  _amAllLogs = [];
+  _amCurrentLogs = [];
+}
+
+async function copyInspectPayload() {
   const el = document.getElementById('inspectPayload');
   if (!el || el.textContent === '—') return;
-  navigator.clipboard.writeText(el.textContent)
-    .then(() => alert('Copied request payload to clipboard!'))
-    .catch(() => alert('Failed to copy. Select and copy manually.'));
+  const val = el.textContent;
+  let ok = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(val);
+      ok = true;
+    } else { throw new Error('no clipboard api'); }
+  } catch (_) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_2) { ok = false; }
+  }
+  const btn = document.querySelector('button[onclick="copyInspectPayload()"]');
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = ok ? '✅ Copied' : '❌ Failed';
+    setTimeout(() => btn.textContent = orig, 1500);
+  }
 }
 
 function toggleInspectPayloadExpand() {
@@ -4023,25 +4464,61 @@ function toggleCardCollapse(bodyId, btnId) {
 }
 
 async function copyProfileField(id, e){
-  const val=document.getElementById(id)?.value;
-  if(!val)return;
-  try{await navigator.clipboard.writeText(val);}catch(ex){}
-  const btn=e&&e.currentTarget;
-  if(!btn)return;
-  const orig=btn.textContent;
-  btn.textContent='✅';
-  setTimeout(()=>btn.textContent=orig,1500);
+  const val = document.getElementById(id)?.value;
+  if (!val) return;
+  const btn = e && (e.currentTarget || e.target);
+  let ok = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(val);
+      ok = true;
+    } else {
+      throw new Error('no clipboard api');
+    }
+  } catch (_) {
+    // fallback: temporary textarea + execCommand
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_2) { ok = false; }
+  }
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = ok ? '✅' : '❌';
+  setTimeout(() => btn.textContent = orig, 1500);
 }
 
 async function copySettingsToken(e){
-  const val=document.getElementById('proxyAuthToken').value;
-  if(!val)return;
-  try{await navigator.clipboard.writeText(val);}catch(ex){}
-  const btn=e&&e.currentTarget||document.querySelector('[onclick*="copySettingsToken"]');
-  if(!btn)return;
-  const orig=btn.textContent;
-  btn.textContent='✅';
-  setTimeout(()=>btn.textContent=orig,1500);
+  const val = document.getElementById('proxyAuthToken')?.value;
+  if (!val) return;
+  const btn = (e && (e.currentTarget || e.target)) || document.querySelector('[onclick*="copySettingsToken"]');
+  let ok = false;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(val);
+      ok = true;
+    } else { throw new Error('no clipboard api'); }
+  } catch (_) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = val;
+      ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch (_2) { ok = false; }
+  }
+  if (!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = ok ? '✅' : '❌';
+  setTimeout(() => btn.textContent = orig, 1500);
 }
 
 // ════════════════════════════════════════════════════════════
