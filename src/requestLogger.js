@@ -8,8 +8,9 @@
 const fs   = require('fs');
 const path = require('path');
 
-const DATA_DIR  = path.join(__dirname, '..', 'data');
-const LOGS_FILE = path.join(DATA_DIR, 'logs.jsonl');
+const DATA_DIR    = path.join(__dirname, '..', 'data');
+const LOGS_FILE   = path.join(DATA_DIR, 'logs.jsonl');
+const STATS_FILE  = path.join(DATA_DIR, 'token_stats.json');
 const MAX_FILE_DAYS = 30; // purge entries older than this on startup
 
 class RequestLogger {
@@ -17,9 +18,13 @@ class RequestLogger {
     this.maxEntries = maxEntries;
     this.entries = [];       // newest first
     this._ws = null;         // write stream
+    this._tokenStats = { totalTokens: 0, totalPrompt: 0, totalCompletion: 0, totalRequests: 0 };
+    this._statsDirty = false;
+    this._statsFlushTimer = null;
 
     this._ensureDir();
     this._loadFromDisk();
+    this._loadTokenStats();
     this._openStream();
   }
 
@@ -54,6 +59,40 @@ class RequestLogger {
     }
   }
 
+  _loadTokenStats() {
+    try {
+      if (fs.existsSync(STATS_FILE)) {
+        const raw = JSON.parse(fs.readFileSync(STATS_FILE, 'utf8'));
+        this._tokenStats = {
+          totalTokens:     raw.totalTokens     || 0,
+          totalPrompt:     raw.totalPrompt     || 0,
+          totalCompletion: raw.totalCompletion || 0,
+          totalRequests:   raw.totalRequests   || 0,
+        };
+        console.log(`[Logger] Token stats loaded — ${this._tokenStats.totalTokens.toLocaleString()} total tokens across ${this._tokenStats.totalRequests.toLocaleString()} requests`);
+      }
+    } catch (err) {
+      console.warn('[Logger] Could not load token stats:', err.message);
+    }
+  }
+
+  _flushTokenStats() {
+    try {
+      fs.writeFileSync(STATS_FILE, JSON.stringify(this._tokenStats), 'utf8');
+      this._statsDirty = false;
+    } catch (err) {
+      console.warn('[Logger] Could not save token stats:', err.message);
+    }
+  }
+
+  _scheduleStatsFlush() {
+    if (this._statsFlushTimer) return;
+    this._statsFlushTimer = setTimeout(() => {
+      this._statsFlushTimer = null;
+      if (this._statsDirty) this._flushTokenStats();
+    }, 5000); // batch writes — flush at most every 5s
+  }
+
   _openStream() {
     try {
       this._ws = fs.createWriteStream(LOGS_FILE, { flags: 'a', encoding: 'utf8' });
@@ -86,10 +125,24 @@ class RequestLogger {
     this.entries.unshift(entry);
     if (this.entries.length > this.maxEntries) this.entries.pop();
 
-    // Persist
+    // Persist log line
     if (this._ws) {
       this._ws.write(JSON.stringify(entry) + '\n');
     }
+
+    // Accumulate all-time token stats
+    this._tokenStats.totalRequests++;
+    if (tokens) {
+      this._tokenStats.totalTokens     += tokens.total      || 0;
+      this._tokenStats.totalPrompt     += tokens.prompt     || 0;
+      this._tokenStats.totalCompletion += tokens.completion || 0;
+    }
+    this._statsDirty = true;
+    this._scheduleStatsFlush();
+  }
+
+  getTokenStats() {
+    return { ...this._tokenStats };
   }
 
   /**

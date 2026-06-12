@@ -526,6 +526,7 @@ app.get('/status', (req, res) => {
       maxPerKey:               cfg.maxPerMinute,
       keys:                    pool.getStats(),
     },
+    tokenStats: reqLogger.getTokenStats(),
   });
 });
 

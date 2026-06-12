@@ -456,9 +456,9 @@
       <div class="stat-sub">at hard cap</div>
     </div>
     <div class="stat-card">
-      <div class="stat-label">Total Tokens</div>
+      <div class="stat-label">Total Tokens (All Time)</div>
       <div class="stat-value c-accent" id="statMonitorTokens">—</div>
-      <div class="stat-sub" id="statMonitorTokensBreakdown">all recorded</div>
+      <div class="stat-sub" id="statMonitorTokensBreakdown">all time</div>
     </div>
   </div>
 
@@ -2034,6 +2034,17 @@ async function fetchStatus() {
     document.getElementById('capPct').textContent=pct;
     document.getElementById('bigBar').style.width=pct+'%';
     document.getElementById('poolSummary').textContent=`${healthy} healthy · ${near} near · ${exhausted} exhausted`;
+
+    // All-time token stats from server (not capped by in-memory log window)
+    if (d.tokenStats) {
+      const ts = d.tokenStats;
+      const monTok = document.getElementById('statMonitorTokens');
+      const monBreak = document.getElementById('statMonitorTokensBreakdown');
+      if (monTok) monTok.textContent = ts.totalTokens > 0 ? formatTokenCount(ts.totalTokens) : '—';
+      if (monBreak) monBreak.textContent = ts.totalTokens > 0
+        ? `P: ${formatTokenCount(ts.totalPrompt)} · C: ${formatTokenCount(ts.totalCompletion)}`
+        : 'all time';
+    }
 
     // Mark the provider that received the latest logged request
     if (_activeLogs.length > 0) {
