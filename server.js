@@ -86,7 +86,7 @@ function isValidSession(token) {
 
 // ── Auth Middleware ────────────────────────────────────────────────────────
 // Only the dashboard page itself and static assets are open — everything else requires auth
-const OPEN_PREFIXES = ['/dashboard'];
+const OPEN_PREFIXES = ['/dashboard', '/stats'];
 
 function authMiddleware(req, res, next) {
   const isOpen = OPEN_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'));
@@ -527,6 +527,75 @@ app.get('/status', (req, res) => {
       keys:                    pool.getStats(),
     },
     tokenStats: reqLogger.getTokenStats(),
+  });
+});
+
+// ── GET /stats/summary ────────────────────────────────────────────────────
+// Lightweight endpoint for external clients (e.g. Telegram bots).
+// Auth: Bearer <dashboard session token> OR Bearer <proxyAuthToken>.
+app.get('/stats/summary', (req, res) => {
+  const authHeader = req.headers['authorization'] || '';
+  const match      = authHeader.match(/^Bearer\s+(.+)$/i);
+  const provided   = match ? match[1] : null;
+
+  const checkToken = (stored) => stored && provided &&
+    provided.length === stored.length &&
+    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(stored));
+
+  const allowed = isValidSession(provided) ||
+    checkToken(cfg.proxyAuthToken) ||
+    checkToken(cfg.anthropicProxyToken) ||
+    checkToken(cfg.googleProxyToken);
+
+  if (!allowed) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const ts   = reqLogger.getTokenStats();
+  const logs = reqLogger.getAll();
+
+  // Avg latency from successful requests in the in-memory window
+  let latSum = 0, latCount = 0;
+  for (const e of logs) {
+    if (e.responseTime && e.status >= 200 && e.status < 400) {
+      latSum += e.responseTime;
+      latCount++;
+    }
+  }
+  const avgLatencyMs = latCount > 0 ? Math.round(latSum / latCount) : null;
+
+  // Current RQM across all providers
+  const currentRpm = pool ? pool.getTotalRequests() : 0;
+
+  // Uptime
+  const uptimeSec = Math.floor(process.uptime());
+  const h = Math.floor(uptimeSec / 3600);
+  const m = Math.floor((uptimeSec % 3600) / 60);
+  const s = uptimeSec % 60;
+  const uptimeStr = h > 0
+    ? `${h}h ${m}m ${s}s`
+    : m > 0 ? `${m}m ${s}s` : `${s}s`;
+
+  res.json({
+    ok: true,
+    uptime: uptimeStr,
+    providers: {
+      total:   cfg.providers ? cfg.providers.length : 0,
+      enabled: cfg.providers ? cfg.providers.filter(p => p.enabled !== false).length : 0,
+    },
+    requests: {
+      allTime:    ts.totalRequests,
+      currentRpm: currentRpm,
+    },
+    tokens: {
+      allTime:    ts.totalTokens,
+      prompt:     ts.totalPrompt,
+      completion: ts.totalCompletion,
+    },
+    latency: {
+      avgMs:   avgLatencyMs,
+      samples: latCount,
+    },
   });
 });
 

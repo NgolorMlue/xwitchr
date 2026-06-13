@@ -380,11 +380,281 @@
       }
     }
 
+    /* ── New Layout System classes ── */
+    .pool-stats-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 0;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    .pool-stat-col {
+      border-right: 1px solid var(--border);
+      padding-right: 20px;
+    }
+    .pool-stat-col:nth-child(2) {
+      padding: 0 20px;
+    }
+    .pool-stat-col:last-child {
+      border-right: none;
+      padding-left: 20px;
+    }
+    .pool-summary-row2 {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .pool-utilization-box {
+      margin-left: auto;
+      flex: 1;
+      min-width: 160px;
+    }
+    .charts-row {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+    }
+    .profile-grid-row1 {
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 16px;
+    }
+    .profile-grid-row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .profile-grid-row3 {
+      display: grid;
+      grid-template-columns: 1fr 1px 1fr;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+    }
+
     /* ── Responsive ── */
-    @media(max-width:1000px){.settings-grid{grid-template-columns:1fr}}
-    @media(max-width:960px){.charts-row{grid-template-columns:1fr !important}}
-    @media(max-width:860px){.stats-row{grid-template-columns:1fr 1fr}}
-    @media(max-width:540px){.stats-row{grid-template-columns:1fr};.page{padding:14px};.header{padding:0 14px}}
+    @media(max-width:1000px){
+      .settings-grid{grid-template-columns:1fr}
+      #page-settings {
+        height: auto !important;
+        overflow: auto !important;
+      }
+      .settings-grid {
+        display: flex !important;
+        flex-direction: column !important;
+        height: auto !important;
+      }
+      .settings-col {
+        height: auto !important;
+      }
+      .settings-col:first-child {
+        overflow-y: visible !important;
+      }
+    }
+    @media(max-width:960px){
+      .charts-row{grid-template-columns:1fr !important}
+    }
+    @media(max-width:860px){
+      .stats-row{grid-template-columns:1fr 1fr}
+    }
+    @media(max-width:768px){
+      /* Header Grid Area */
+      .header {
+        display: grid !important;
+        grid-template-areas: 
+          "brand right"
+          "nav nav" !important;
+        grid-template-columns: auto 1fr !important;
+        height: auto !important;
+        padding: 10px 14px !important;
+        gap: 10px !important;
+      }
+      .header-left {
+        display: contents !important;
+      }
+      .header-brand {
+        grid-area: brand;
+      }
+      .header-right {
+        grid-area: right;
+        justify-content: flex-end !important;
+        gap: 8px !important;
+      }
+      .tab-nav {
+        grid-area: nav;
+        overflow-x: auto !important;
+        white-space: nowrap !important;
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        padding-bottom: 2px !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+      }
+      .tab-nav::-webkit-scrollbar {
+        display: none;
+      }
+      .tab-btn {
+        flex-shrink: 0 !important;
+        padding: 8px 12px !important;
+        font-size: 12px !important;
+      }
+      #clock {
+        display: none !important;
+      }
+
+      /* Pool Summary Responsive Stack */
+      .pool-stats-row {
+        grid-template-columns: 1fr !important;
+        gap: 16px !important;
+      }
+      .pool-stat-col {
+        border-right: none !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding: 0 0 16px 0 !important;
+      }
+      .pool-stat-col:last-child {
+        border-bottom: none !important;
+        padding-bottom: 0 !important;
+      }
+      .pool-summary-row2 {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+      .pool-utilization-box {
+        margin-left: 0 !important;
+        width: 100% !important;
+      }
+
+      /* Profile stack */
+      .profile-grid-row1 {
+        grid-template-columns: 1fr !important;
+      }
+      .profile-grid-row2 {
+        grid-template-columns: 1fr !important;
+      }
+      .profile-grid-row3 {
+        grid-template-columns: 1fr !important;
+      }
+      .profile-grid-row3 > div:nth-child(2) {
+        display: none !important;
+      }
+
+      /* Table Cardification (Log Table) */
+      .log-wrap table, .log-wrap tbody, .log-wrap tr, .log-wrap td {
+        display: block !important;
+        width: 100% !important;
+      }
+      .log-wrap thead {
+        display: none !important;
+      }
+      .log-wrap tr {
+        border: 1px solid var(--border) !important;
+        border-radius: 8px !important;
+        margin-bottom: 12px !important;
+        padding: 12px !important;
+        background: var(--surface2) !important;
+      }
+      .log-wrap td {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 6px 0 !important;
+        border-bottom: 1px solid rgba(30, 42, 61, 0.3) !important;
+        white-space: normal !important;
+      }
+      .log-wrap td:last-child {
+        border-bottom: none !important;
+      }
+      .log-wrap td::before {
+        content: attr(data-label) ": ";
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        font-size: 10px;
+        letter-spacing: .05em;
+      }
+
+      /* Table Cardification (Provider Table) */
+      .provider-table-wrap {
+        overflow-x: visible !important;
+      }
+      .provider-table, .provider-table tbody, .provider-table tr, .provider-table td {
+        display: block !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+      }
+      .provider-table thead {
+        display: none !important;
+      }
+      .provider-table tr {
+        position: relative !important;
+        border: 1px solid var(--border) !important;
+        border-radius: 10px !important;
+        background: var(--surface2) !important;
+        margin-bottom: 16px !important;
+        padding: 12px !important;
+      }
+      .provider-table td {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 6px 0 !important;
+        border: none !important;
+      }
+      .provider-table td.td-num {
+        font-weight: 700;
+        font-size: 13px;
+        color: var(--accent);
+        justify-content: flex-start !important;
+        border-bottom: 1px solid var(--border) !important;
+        padding-bottom: 8px !important;
+        margin-bottom: 8px !important;
+      }
+      .provider-table td.td-num::before {
+        content: "Provider #" !important;
+      }
+      .provider-table td.td-url::before { content: "Base URL"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-key::before { content: "API Key"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-type::before { content: "Format Type"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-rpm::before { content: "RPM Limit"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-tpm::before { content: "TPM Limit"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-models::before { content: "Models"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-en::before { content: "Enabled"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      .provider-table td.td-del::before { content: "Action"; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; width: 80px; flex-shrink: 0; }
+      
+      .provider-table td .tbl-input,
+      .provider-table td .tbl-num-input,
+      .provider-table td select,
+      .provider-table td .models-btn {
+        flex: 1 !important;
+        text-align: left !important;
+        background: var(--surface) !important;
+        border: 1px solid var(--border) !important;
+        padding: 6px 10px !important;
+        border-radius: 6px !important;
+        max-width: none !important;
+      }
+      
+      /* Modals */
+      .modal-box, .am-modal-box {
+        max-width: 95% !important;
+        max-height: 95vh !important;
+      }
+      .am-stat-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+      }
+    }
+    @media(max-width:540px){
+      .stats-row{grid-template-columns:1fr !important}
+      .page{padding:14px !important}
+      .login-box {
+        padding: 24px 20px !important;
+        width: 90% !important;
+      }
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -445,8 +715,8 @@
   <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:16px">
 
     <!-- Row 1: big numbers -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);padding-bottom:16px">
-      <div style="border-right:1px solid var(--border);padding-right:20px">
+    <div class="pool-stats-row">
+      <div class="pool-stat-col">
         <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Providers In Use</div>
         <div style="display:flex;align-items:baseline;gap:6px">
           <span style="font-size:30px;font-weight:700;color:var(--accent)" id="statActiveProviders">—</span>
@@ -454,12 +724,12 @@
         </div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statTotal">—</div>
       </div>
-      <div style="border-right:1px solid var(--border);padding:0 20px">
+      <div class="pool-stat-col">
         <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Current Req / Min</div>
         <div style="font-size:30px;font-weight:700;color:var(--accent)" id="statReq">—</div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statCap">—</div>
       </div>
-      <div style="padding-left:20px">
+      <div class="pool-stat-col">
         <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Total Tokens (All Time)</div>
         <div style="font-size:30px;font-weight:700;color:var(--accent)" id="statMonitorTokens">—</div>
         <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statMonitorTokensBreakdown">all time</div>
@@ -467,7 +737,7 @@
     </div>
 
     <!-- Row 2: status pills + utilization -->
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+    <div class="pool-summary-row2">
       <div style="display:flex;align-items:center;gap:7px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:6px 14px">
         <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>
         <span style="font-size:11px;color:var(--text-muted)">Healthy</span>
@@ -483,7 +753,7 @@
         <span style="font-size:11px;color:var(--text-muted)">Exhausted</span>
         <span style="font-size:15px;font-weight:700;color:var(--red)" id="statExhausted">—</span>
       </div>
-      <div style="margin-left:auto;flex:1;min-width:160px">
+      <div class="pool-utilization-box">
         <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:5px">
           <span style="font-weight:600;text-transform:uppercase;letter-spacing:.06em">Pool Utilization</span>
           <span style="font-family:var(--font-mono)"><strong id="capUsed">0</strong> / <span id="capTotal">—</span> &nbsp;(<span id="capPct">0</span>%)</span>
@@ -531,7 +801,7 @@
   </div>
 
   <!-- Live Analytics Charts Grid -->
-  <div class="charts-row" style="display: grid; grid-template-columns: 2fr 1fr; gap: 16px;">
+  <div class="charts-row">
     <!-- Line Chart Card -->
     <div class="card" style="display: flex; flex-direction: column; gap: 10px; min-height: 250px;">
       <div class="section-header" style="margin-bottom: 8px;">
@@ -944,7 +1214,7 @@
   <div style="display:flex;flex-direction:column;gap:16px;max-width:1100px;margin:0 auto;width:100%">
 
     <!-- Row 1: Identity + Security -->
-    <div style="display:grid;grid-template-columns:260px 1fr;gap:16px">
+    <div class="profile-grid-row1">
 
       <!-- Identity -->
       <div class="card" style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:24px 20px;text-align:center">
@@ -989,7 +1259,7 @@
     </div>
 
     <!-- Row 2: API Access (3 cols) -->
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px">
+    <div class="profile-grid-row2">
 
       <!-- OpenAI -->
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
@@ -1078,7 +1348,7 @@
     </div>
 
     <!-- Row 3: System & Updates -->
-    <div class="card" style="display:grid;grid-template-columns:1fr 1px 1fr;gap:0;padding:0;overflow:hidden">
+    <div class="card profile-grid-row3">
 
       <!-- Left: App identity -->
       <div style="padding:20px 24px;display:flex;flex-direction:column;gap:10px">
@@ -2811,15 +3081,15 @@ function renderLogsTable() {
     }
 
     return `<tr onclick="openLogInspector(${logIdx})" style="cursor: pointer;" title="Click to inspect request details">
-      <td>${t}</td>
-      <td class="m">${escHtml(e.method || '')}</td>
-      <td style="font-family:var(--font-mono); color:var(--text-muted)">${escHtml(e.model || '—')}</td>
-      <td class="p">${escHtml(e.path || '')}</td>
-      <td style="color:var(--text-muted)">${escHtml(e.urlHint || '—')}</td>
-      <td>${escHtml(e.keyHint || '—')}</td>
-      <td style="white-space:nowrap">${tokensText}</td>
-      <td class="${sc}">${e.status || 'ERR'}</td>
-      <td>${rt}</td>
+      <td data-label="Time">${t}</td>
+      <td data-label="Method" class="m">${escHtml(e.method || '')}</td>
+      <td data-label="Model" style="font-family:var(--font-mono); color:var(--text-muted)">${escHtml(e.model || '—')}</td>
+      <td data-label="Path" class="p">${escHtml(e.path || '')}</td>
+      <td data-label="Provider" style="color:var(--text-muted)">${escHtml(e.urlHint || '—')}</td>
+      <td data-label="Key">${escHtml(e.keyHint || '—')}</td>
+      <td data-label="Tokens" style="white-space:nowrap">${tokensText}</td>
+      <td data-label="Status" class="${sc}">${e.status || 'ERR'}</td>
+      <td data-label="RT">${rt}</td>
     </tr>`;
   }).join('');
 }
@@ -3906,25 +4176,25 @@ function makeRow(idx, p){
   const enabled = p.enabled !== false;
   if (!enabled) tr.classList.add('provider-disabled');
   tr.innerHTML=`
-    <td class="td-num">${num}</td>
-    <td class="td-url"><input class="tbl-input" type="text" placeholder="https://api.example.com/v1" value="${escHtml(p.url||'')}" oninput="updateProviderField(${idx}, 'url', this.value)" /></td>
-    <td class="td-key"><input class="tbl-input key-input" type="${_allKeysVisible?'text':'password'}" placeholder="your-api-key" value="${escHtml(p.key||'')}" oninput="updateProviderField(${idx}, 'key', this.value)" /></td>
-    <td class="td-type">
+    <td class="td-num" data-label="#">${num}</td>
+    <td class="td-url" data-label="API Base URL"><input class="tbl-input" type="text" placeholder="https://api.example.com/v1" value="${escHtml(p.url||'')}" oninput="updateProviderField(${idx}, 'url', this.value)" /></td>
+    <td class="td-key" data-label="API Key"><input class="tbl-input key-input" type="${_allKeysVisible?'text':'password'}" placeholder="your-api-key" value="${escHtml(p.key||'')}" oninput="updateProviderField(${idx}, 'key', this.value)" /></td>
+    <td class="td-type" data-label="Type">
       <select class="type-select type-${p.type||'openai'}" onchange="updateProviderField(${idx},'type',this.value);this.className='type-select type-'+this.value">
         <option value="openai"    ${(!p.type||p.type==='openai')?'selected':''}>OpenAI</option>
         <option value="anthropic" ${p.type==='anthropic'?'selected':''}>Anthropic</option>
         <option value="google"    ${p.type==='google'?'selected':''}>Google</option>
       </select>
     </td>
-    <td class="td-rpm"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.rpm||''}" oninput="updateProviderField(${idx}, 'rpm', this.value?parseInt(this.value)||null:null)" /></td>
-    <td class="td-tpm"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.tpm||''}" oninput="updateProviderField(${idx}, 'tpm', this.value?parseInt(this.value)||null:null)" /></td>
-    <td class="td-models">
+    <td class="td-rpm" data-label="RPM"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.rpm||''}" oninput="updateProviderField(${idx}, 'rpm', this.value?parseInt(this.value)||null:null)" /></td>
+    <td class="td-tpm" data-label="TPM"><input class="tbl-num-input" type="number" min="1" placeholder="—" value="${p.tpm||''}" oninput="updateProviderField(${idx}, 'tpm', this.value?parseInt(this.value)||null:null)" /></td>
+    <td class="td-models" data-label="Models">
       <button class="models-btn ${p.allowedModels && p.allowedModels.length > 0 ? 'has-filter' : ''}" onclick="openModelModal(${idx})">
         ${modelLabel(p)}
       </button>
     </td>
-    <td class="td-en"><button class="toggle-btn" onclick="toggleProviderEnabled(${idx})" title="${enabled?'Disable provider':'Enable provider'}">${enabled?'🟢':'⚫'}</button></td>
-    <td class="td-del"><button class="del-btn" onclick="delRow(${idx})" title="Remove">✕</button></td>`;
+    <td class="td-en" data-label="On"><button class="toggle-btn" onclick="toggleProviderEnabled(${idx})" title="${enabled?'Disable provider':'Enable provider'}">${enabled?'🟢':'⚫'}</button></td>
+    <td class="td-del" data-label="Remove"><button class="del-btn" onclick="delRow(${idx})" title="Remove">✕</button></td>`;
   return tr;
 }
 
