@@ -1609,11 +1609,12 @@ function renderModelsTab() {
       overallSuccessCount += stats.successCount;
     }
 
+    const srvM = _serverTokenStats?.models?.[m];
     modelRowsData.push({
       name: m,
       supporting: supporting,
-      requestCount: stats.requestCount,
-      totalTokens: stats.totalTokens,
+      requestCount: srvM ? srvM.totalRequests : stats.requestCount,
+      totalTokens:  srvM ? srvM.totalTokens  : stats.totalTokens,
       avgLatency: avgLatency,
       lastStatus: stats.lastStatus
     });
@@ -2702,15 +2703,7 @@ function updateAggregateStats() {
     breakdownEl.textContent = `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}`;
   }
 
-  const monitorTokensEl = document.getElementById('statMonitorTokens');
-  if (monitorTokensEl) monitorTokensEl.textContent = totalTokens > 0 ? formatTokenCount(totalTokens) : '—';
-
-  const monitorBreakdownEl = document.getElementById('statMonitorTokensBreakdown');
-  if (monitorBreakdownEl) {
-    monitorBreakdownEl.textContent = totalTokens > 0
-      ? `P: ${formatTokenCount(totalPrompt)} · C: ${formatTokenCount(totalCompletion)}`
-      : 'all recorded';
-  }
+  // statMonitorTokens (All Time) is owned by fetchStatus() — do not touch here
 }
 
 async function fetchLogs(){
