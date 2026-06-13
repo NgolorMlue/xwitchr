@@ -85,7 +85,9 @@
     /* ── Key Grid ── */
     .key-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
     .key-item{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:border-color .2s,box-shadow .2s}
-    .key-item.is-current{border-color:var(--accent);box-shadow:0 0 0 1px rgba(59,130,246,.15),0 0 18px rgba(59,130,246,.08)}
+    .key-item.is-healthy{border-color:rgba(34,197,94,.4);box-shadow:0 0 0 1px rgba(34,197,94,.08)}
+    .key-item.is-running{border-color:rgba(59,130,246,.5);box-shadow:0 0 0 1px rgba(59,130,246,.15),0 0 14px rgba(59,130,246,.07)}
+    .key-item.is-current{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 1px rgba(139,92,246,.2),0 0 18px rgba(139,92,246,.1)}
     .key-item.is-near{border-color:var(--yellow)}
     .key-item.is-exhausted{border-color:var(--red);opacity:.6}
     .key-idx{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);text-align:center}
@@ -97,7 +99,8 @@
     .key-right{display:flex;align-items:center;gap:7px}
     .key-count{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);white-space:nowrap}
     .pill{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:2px 8px;border-radius:99px;white-space:nowrap}
-    .pill-active{background:rgba(59,130,246,.15);color:var(--accent)}
+    .pill-active{background:rgba(139,92,246,.15);color:var(--purple)}
+    .pill-running{background:rgba(59,130,246,.15);color:var(--accent)}
     .pill-healthy{background:rgba(34,197,94,.1);color:var(--green)}
     .pill-near{background:rgba(234,179,8,.1);color:var(--yellow)}
     .pill-exhausted{background:rgba(239,68,68,.1);color:var(--red)}
@@ -438,37 +441,57 @@
     <button class="go-settings-btn" onclick="switchTab('settings')">Go to Settings →</button>
   </div>
 
-  <!-- Provider Stats -->
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-label">Healthy</div>
-      <div class="stat-value c-green" id="statHealthy">—</div>
-      <div class="stat-sub" id="statTotal">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Near Limit</div>
-      <div class="stat-value c-yellow" id="statNear">—</div>
-      <div class="stat-sub">at threshold</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Exhausted</div>
-      <div class="stat-value c-red" id="statExhausted">—</div>
-      <div class="stat-sub">at hard cap</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total Tokens (All Time)</div>
-      <div class="stat-value c-accent" id="statMonitorTokens">—</div>
-      <div class="stat-sub" id="statMonitorTokensBreakdown">all time</div>
-    </div>
-  </div>
+  <!-- Pool Summary Card -->
+  <div class="card" style="padding:20px 22px;display:flex;flex-direction:column;gap:16px">
 
-  <!-- Capacity Bar -->
-  <div class="capacity-card">
-    <div class="capacity-header">
-      <div class="capacity-label">Pool Utilization</div>
-      <div class="capacity-numbers"><strong id="capUsed">0</strong> / <span id="capTotal">—</span> req/min &nbsp;(<span id="capPct">0</span>%)</div>
+    <!-- Row 1: big numbers -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-bottom:1px solid var(--border);padding-bottom:16px">
+      <div style="border-right:1px solid var(--border);padding-right:20px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Providers In Use</div>
+        <div style="display:flex;align-items:baseline;gap:6px">
+          <span style="font-size:30px;font-weight:700;color:var(--accent)" id="statActiveProviders">—</span>
+          <span style="font-size:13px;color:var(--text-dim)">/ <span id="statTotalProviders">—</span> total</span>
+        </div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statTotal">—</div>
+      </div>
+      <div style="border-right:1px solid var(--border);padding:0 20px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Current Req / Min</div>
+        <div style="font-size:30px;font-weight:700;color:var(--accent)" id="statReq">—</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statCap">—</div>
+      </div>
+      <div style="padding-left:20px">
+        <div style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-muted);margin-bottom:4px">Total Tokens (All Time)</div>
+        <div style="font-size:30px;font-weight:700;color:var(--accent)" id="statMonitorTokens">—</div>
+        <div style="font-size:11px;color:var(--text-dim);margin-top:2px" id="statMonitorTokensBreakdown">all time</div>
+      </div>
     </div>
-    <div class="big-bar-wrap"><div class="big-bar" id="bigBar" style="width:0%"></div></div>
+
+    <!-- Row 2: status pills + utilization -->
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(34,197,94,.07);border:1px solid rgba(34,197,94,.2);border-radius:8px;padding:6px 14px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--green);display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:11px;color:var(--text-muted)">Healthy</span>
+        <span style="font-size:15px;font-weight:700;color:var(--green)" id="statHealthy">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(234,179,8,.07);border:1px solid rgba(234,179,8,.2);border-radius:8px;padding:6px 14px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--yellow);display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:11px;color:var(--text-muted)">Near Limit</span>
+        <span style="font-size:15px;font-weight:700;color:var(--yellow)" id="statNear">—</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:7px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:8px;padding:6px 14px">
+        <span style="width:8px;height:8px;border-radius:50%;background:var(--red);display:inline-block;flex-shrink:0"></span>
+        <span style="font-size:11px;color:var(--text-muted)">Exhausted</span>
+        <span style="font-size:15px;font-weight:700;color:var(--red)" id="statExhausted">—</span>
+      </div>
+      <div style="margin-left:auto;flex:1;min-width:160px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:5px">
+          <span style="font-weight:600;text-transform:uppercase;letter-spacing:.06em">Pool Utilization</span>
+          <span style="font-family:var(--font-mono)"><strong id="capUsed">0</strong> / <span id="capTotal">—</span> &nbsp;(<span id="capPct">0</span>%)</span>
+        </div>
+        <div class="big-bar-wrap"><div class="big-bar" id="bigBar" style="width:0%"></div></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- Key Grid -->
@@ -581,6 +604,7 @@
     <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
       <div class="section-title">Request Log</div>
       <div style="display: flex; align-items: center; gap: 8px;">
+        <button class="icon-btn" onclick="fetchLogs()" title="Refresh logs">🔄 Refresh</button>
         <button class="icon-btn" onclick="toggleAdvancedFilterPanel()" id="advFilterToggleBtn">⚙️ Advanced Filters</button>
         <button class="icon-btn" onclick="toggleLogFullscreen()" id="fullscreenLogBtn">🖥️ Fullscreen</button>
         <label style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; white-space: nowrap;">
@@ -738,6 +762,7 @@
           <option value="unchecked">❓ Not Checked</option>
         </select>
         <button class="models-btn" onclick="checkAllModelsAlive()">Check All Alive</button>
+        <button class="icon-btn" onclick="modelTabFetchLogs();fetchStatus()" title="Refresh model directory">🔄 Refresh</button>
       </div>
     </div>
     <!-- Date filter active indicator -->
@@ -1962,16 +1987,22 @@ function barColor(s) {
   return s==='exhausted'?'var(--red)':s==='near-limit'?'var(--yellow)':'var(--green)';
 }
 function pill(k) {
-  if(k.status==='offline')              return '<span class="pill pill-exhausted" style="background:rgba(239,68,68,.15);border:1px solid var(--red);animation:pulse 1.5s infinite">⚠️ Offline</span>';
-  if(k.isLatestRequest)                 return '<span class="pill pill-active">● Active</span>';
-  if(k.status==='exhausted')            return '<span class="pill pill-exhausted">Exhausted</span>';
-  if(k.status==='near-limit')           return '<span class="pill pill-near">Near Limit</span>';
-  if(k.requestsLastMinute > 0)          return '<span class="pill pill-healthy" style="background:rgba(34,197,94,.15);border:1px solid rgba(34,197,94,.3)">▶ Running</span>';
+  if(k.status==='offline')     return '<span class="pill pill-exhausted" style="background:rgba(239,68,68,.15);border:1px solid var(--red);animation:pulse 1.5s infinite">⚠️ Offline</span>';
+  if(k.isLatestRequest)        return '<span class="pill pill-active">● Active</span>';
+  if(k.status==='exhausted')   return '<span class="pill pill-exhausted">Exhausted</span>';
+  if(k.status==='near-limit')  return '<span class="pill pill-near">Near Limit</span>';
+  if(k.requestsLastMinute > 0) return '<span class="pill pill-running">▶ Running</span>';
   return '<span class="pill pill-healthy">Healthy</span>';
 }
 function renderKey(k) {
   const pct = Math.min(100, Math.round(k.requestsLastMinute/k.maxPerMinute*100));
-  const cls = k.status==='offline'?'is-exhausted':k.isLatestRequest?'is-current':k.status==='near-limit'?'is-near':k.status==='exhausted'?'is-exhausted':'';
+  const cls = k.status==='offline'  ? 'is-exhausted' :
+              k.isLatestRequest     ? 'is-current' :
+              k.requestsLastMinute>0? 'is-running' :
+              k.status==='near-limit'?'is-near' :
+              k.status==='exhausted' ?'is-exhausted' :
+              k.enabled===false      ?'' :
+              'is-healthy';
   return `<div class="key-item ${cls}">
     <div class="key-idx">#${k.index+1}</div>
     <div class="key-info">
@@ -2011,7 +2042,7 @@ async function fetchStatus() {
     const banner = document.getElementById('setupBanner');
     if (!d.configured) {
       banner.classList.add('visible');
-      ['statReq','statHealthy','statNear','statExhausted'].forEach(id => document.getElementById(id).textContent='—');
+      ['statReq','statHealthy','statNear','statExhausted','statActiveProviders','statTotalProviders'].forEach(id => document.getElementById(id).textContent='—');
       document.getElementById('statCap').textContent = 'Not configured';
       document.getElementById('statTotal').textContent = 'Add providers in Settings';
       document.getElementById('keyGrid').innerHTML='<div class="empty-row" style="grid-column:1/-1">No providers loaded — open Settings.</div>';
@@ -2020,22 +2051,26 @@ async function fetchStatus() {
 
     banner.classList.remove('visible');
     const p = d.pool, keys = p.keys;
-    const healthy=keys.filter(k=>k.status==='healthy').length;
-    const near=keys.filter(k=>k.status==='near-limit').length;
-    const exhausted=keys.filter(k=>k.status==='exhausted').length;
-    const maxCap = keys.filter(k=>k.enabled!==false).reduce((s,k)=>s+k.maxPerMinute,0);
-    const pct=maxCap?Math.round(p.totalRequestsLastMinute/maxCap*100):0;
-    document.getElementById('statReq').textContent=p.totalRequestsLastMinute;
-    document.getElementById('statCap').textContent=p.effectiveCapacity+' capacity';
-    document.getElementById('statHealthy').textContent=healthy;
-    document.getElementById('statTotal').textContent=`${keys.length} total providers`;
-    document.getElementById('statNear').textContent=near;
-    document.getElementById('statExhausted').textContent=exhausted;
-    document.getElementById('capUsed').textContent=p.totalRequestsLastMinute;
-    document.getElementById('capTotal').textContent=maxCap;
-    document.getElementById('capPct').textContent=pct;
-    document.getElementById('bigBar').style.width=pct+'%';
-    document.getElementById('poolSummary').textContent=`${healthy} healthy · ${near} near · ${exhausted} exhausted`;
+    const enabledKeys = keys.filter(k=>k.enabled!==false);
+    const healthy   = keys.filter(k=>k.status==='healthy').length;
+    const near      = keys.filter(k=>k.status==='near-limit').length;
+    const exhausted = keys.filter(k=>k.status==='exhausted').length;
+    const active    = keys.filter(k=>k.requestsLastMinute>0).length;
+    const maxCap    = enabledKeys.reduce((s,k)=>s+k.maxPerMinute,0);
+    const pct       = maxCap?Math.round(p.totalRequestsLastMinute/maxCap*100):0;
+    document.getElementById('statReq').textContent        = p.totalRequestsLastMinute;
+    document.getElementById('statCap').textContent        = p.effectiveCapacity+' capacity';
+    document.getElementById('statHealthy').textContent    = healthy;
+    document.getElementById('statNear').textContent       = near;
+    document.getElementById('statExhausted').textContent  = exhausted;
+    document.getElementById('statTotal').textContent      = `${enabledKeys.length} enabled`;
+    document.getElementById('statActiveProviders').textContent = active;
+    document.getElementById('statTotalProviders').textContent  = enabledKeys.length;
+    document.getElementById('capUsed').textContent = p.totalRequestsLastMinute;
+    document.getElementById('capTotal').textContent = maxCap;
+    document.getElementById('capPct').textContent   = pct;
+    document.getElementById('bigBar').style.width   = pct+'%';
+    document.getElementById('poolSummary').textContent = `${healthy} healthy · ${near} near · ${exhausted} exhausted`;
 
     // All-time token stats from server (not capped by in-memory log window)
     if (d.tokenStats) {
@@ -4144,6 +4179,13 @@ function closeModelModal() {
   _activeProviderIdx = null;
 }
 
+function _clearProviderModelSection() {
+  _modalCachedModels = [];
+  _modalAllowedModels = [];
+  const ml = document.getElementById('modelList');
+  if (ml) ml.innerHTML = '<div class="model-empty" style="padding:24px 0;text-align:center;color:var(--text-muted);font-size:13px">Select a provider to load models</div>';
+}
+
 function onModalOverlayClick(event) {
   if (event.target.id === 'modelModal') {
     closeModelModal();
@@ -4409,6 +4451,7 @@ async function saveModelSelection() {
       setTimeout(() => {
         hintEl.textContent = origHint;
         hintEl.style.color = '';
+        _clearProviderModelSection();
         closeModelModal();
         alert("Applied locally! Since this is a new provider, please click the global '💾 Save & Apply' button at the bottom of Settings to save it permanently.");
       }, 800);
@@ -4422,6 +4465,7 @@ async function saveModelSelection() {
       setTimeout(() => {
         hintEl.textContent = origHint;
         hintEl.style.color = '';
+        _clearProviderModelSection();
         closeModelModal();
       }, 800);
     } else {
