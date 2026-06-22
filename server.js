@@ -661,10 +661,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
   const clientUserAgent = req.headers['user-agent'] || 'unknown';
+  const isMultipart = (req.headers['content-type'] || '').toLowerCase().startsWith('multipart/form-data');
 
   // Capture request body payload string if present (up to 50,000 chars)
   let reqPayloadStr = '';
-  if (req.body && (req.method === 'POST' || req.method === 'PUT')) {
+  if (isMultipart) {
+    reqPayloadStr = '[multipart/form-data — binary file upload]';
+  } else if (req.body && (req.method === 'POST' || req.method === 'PUT')) {
     try {
       reqPayloadStr = typeof req.body === 'string' ? req.body : JSON.stringify(req.body, null, 2);
       if (reqPayloadStr.length > 50000) {
@@ -676,6 +679,9 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
   let requestedModel = null;
   if (req.body && typeof req.body === 'object' && req.body.model) {
     requestedModel = String(req.body.model);
+  } else if (req.query.model) {
+    // multipart/form-data requests can't be parsed yet — fall back to query param
+    requestedModel = String(req.query.model);
   } else {
     // Try to extract from path for Google native API: /v1/beta/models/gemini-1.5-flash:generateContent
     const googleModelMatch = req.path.match(/\/(?:proxy|v1)\/(?:beta\/)?models\/([^:/]+)/);
@@ -762,7 +768,11 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
       // ── Body preparation ───────────────────────────────────────────────────
       let bodyStr;
-      if (needsConversion && req.body) {
+      if (isMultipart) {
+        // Forward raw multipart body — preserve original content-type (includes boundary)
+        upstreamHeaders['content-type'] = req.headers['content-type'];
+        delete upstreamHeaders['content-length'];
+      } else if (needsConversion && req.body) {
         if (inputFormat === 'openai' && providerType === 'anthropic') {
           bodyStr = JSON.stringify(fmt.openaiToAnthropic(req.body));
         } else if (inputFormat === 'openai' && providerType === 'google') {
@@ -770,11 +780,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         } else {
           bodyStr = JSON.stringify(req.body);
         }
+        upstreamHeaders['content-type']  = 'application/json';
+        upstreamHeaders['content-length'] = Buffer.byteLength(bodyStr);
       } else {
         bodyStr = req.body ? JSON.stringify(req.body) : '';
+        upstreamHeaders['content-type']  = 'application/json';
+        upstreamHeaders['content-length'] = Buffer.byteLength(bodyStr);
       }
-      upstreamHeaders['content-type']  = 'application/json';
-      upstreamHeaders['content-length'] = Buffer.byteLength(bodyStr);
 
       pool.recordRequest(provider, requestedModel);
 
@@ -905,8 +917,12 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
           proxyReq.setTimeout(120_000, () => proxyReq.destroy(new Error('Upstream request timed out')));
           proxyReq.on('error', (err) => { settle(rejectStream, err); });
-          proxyReq.write(bodyStr);
-          proxyReq.end();
+          if (isMultipart) {
+            req.pipe(proxyReq);
+          } else {
+            proxyReq.write(bodyStr);
+            proxyReq.end();
+          }
         });
         return;
       }
@@ -916,12 +932,14 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         method:         req.method,
         url:            urlObj.toString(),
         headers:        upstreamHeaders,
-        data:           ['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase()) ? undefined : bodyStr,
+        data:           ['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase()) ? undefined : (isMultipart ? req : bodyStr),
         validateStatus: () => true,
         responseType:   'arraybuffer',
-        timeout:        30_000,
+        timeout:        isMultipart ? 120_000 : 30_000,
         httpAgent:      ipv4HttpAgent,
         httpsAgent:     ipv4HttpsAgent,
+        maxBodyLength:  isMultipart ? Infinity : undefined,
+        maxContentLength: isMultipart ? Infinity : undefined,
       });
 
       if (upstream.status >= 500 && attempts < maxAttempts - 1) {
