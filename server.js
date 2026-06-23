@@ -714,6 +714,17 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
     });
   }
 
+  // Buffer raw multipart body once before retry loop so retries can resend it
+  let rawMultipartBody = null;
+  if (isMultipart && !['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase())) {
+    rawMultipartBody = await new Promise((resolve, reject) => {
+      const chunks = [];
+      req.on('data', chunk => chunks.push(chunk));
+      req.on('end', () => resolve(Buffer.concat(chunks)));
+      req.on('error', reject);
+    });
+  }
+
   while (attempts < maxAttempts) {
     let provider = null;
     let keyHint = '?';
@@ -767,12 +778,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       }
 
       // ── Body preparation ───────────────────────────────────────────────────
+      const isBodyMethod = !['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase());
       let bodyStr;
       if (isMultipart) {
         // Forward raw multipart body — preserve original content-type (includes boundary)
-        upstreamHeaders['content-type'] = req.headers['content-type'];
-        delete upstreamHeaders['content-length'];
-      } else if (needsConversion && req.body) {
+        upstreamHeaders['content-type']   = req.headers['content-type'];
+        upstreamHeaders['content-length'] = rawMultipartBody ? rawMultipartBody.byteLength : 0;
+      } else if (isBodyMethod && needsConversion && req.body) {
         if (inputFormat === 'openai' && providerType === 'anthropic') {
           bodyStr = JSON.stringify(fmt.openaiToAnthropic(req.body));
         } else if (inputFormat === 'openai' && providerType === 'google') {
@@ -782,10 +794,14 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         }
         upstreamHeaders['content-type']  = 'application/json';
         upstreamHeaders['content-length'] = Buffer.byteLength(bodyStr);
-      } else {
+      } else if (isBodyMethod) {
         bodyStr = req.body ? JSON.stringify(req.body) : '';
         upstreamHeaders['content-type']  = 'application/json';
         upstreamHeaders['content-length'] = Buffer.byteLength(bodyStr);
+      } else {
+        // GET/HEAD/DELETE — strip any body headers so providers don't reject the request
+        delete upstreamHeaders['content-type'];
+        delete upstreamHeaders['content-length'];
       }
 
       pool.recordRequest(provider, requestedModel);
@@ -917,12 +933,12 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
           proxyReq.setTimeout(120_000, () => proxyReq.destroy(new Error('Upstream request timed out')));
           proxyReq.on('error', (err) => { settle(rejectStream, err); });
-          if (isMultipart) {
-            req.pipe(proxyReq);
-          } else {
+          if (isMultipart && rawMultipartBody) {
+            proxyReq.write(rawMultipartBody);
+          } else if (!isMultipart) {
             proxyReq.write(bodyStr);
-            proxyReq.end();
           }
+          proxyReq.end();
         });
         return;
       }
@@ -932,14 +948,12 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         method:         req.method,
         url:            urlObj.toString(),
         headers:        upstreamHeaders,
-        data:           ['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase()) ? undefined : (isMultipart ? req : bodyStr),
+        data:           !isBodyMethod ? undefined : (isMultipart ? rawMultipartBody : bodyStr),
         validateStatus: () => true,
         responseType:   'arraybuffer',
         timeout:        isMultipart ? 120_000 : 30_000,
         httpAgent:      ipv4HttpAgent,
         httpsAgent:     ipv4HttpsAgent,
-        maxBodyLength:  isMultipart ? Infinity : undefined,
-        maxContentLength: isMultipart ? Infinity : undefined,
       });
 
       if (upstream.status >= 500 && attempts < maxAttempts - 1) {
