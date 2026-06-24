@@ -47,9 +47,9 @@ try {
 
 
 // ── Boot ───────────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.PORT || '51067', 10);
-
 let cfg  = configStore.load();
+const PORT = (cfg.port >= 1 && cfg.port <= 65535) ? cfg.port : parseInt(process.env.PORT || '51067', 10);
+
 let pool = buildPool(cfg);
 
 function buildPool(c) {
@@ -62,6 +62,14 @@ const reqLogger = new RequestLogger(200);
 // ── Express ────────────────────────────────────────────────────────────────
 const app = express();
 app.use(cors());
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  if (cfg.httpsEnabled) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  next();
+});
 app.use(morgan('dev'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
@@ -72,6 +80,26 @@ const crypto = require('crypto');
 // In-memory session store: token → { createdAt }
 const activeDashboardTokens = new Map();
 const SESSION_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
+// Login rate limiting: 10 failures per IP per 15-min window
+const loginAttempts = new Map();
+const LOGIN_MAX        = 10;
+const LOGIN_WINDOW_MS  = 15 * 60 * 1000;
+
+function isLoginRateLimited(ip) {
+  const data = loginAttempts.get(ip);
+  if (!data) return false;
+  if (Date.now() - data.windowStart > LOGIN_WINDOW_MS) { loginAttempts.delete(ip); return false; }
+  return data.count >= LOGIN_MAX;
+}
+
+function recordLoginFail(ip) {
+  const now  = Date.now();
+  let   data = loginAttempts.get(ip);
+  if (!data || now - data.windowStart > LOGIN_WINDOW_MS) data = { count: 0, windowStart: now };
+  data.count++;
+  loginAttempts.set(ip, data);
+}
 
 function isValidSession(token) {
   const sess = activeDashboardTokens.get(token);
@@ -139,6 +167,12 @@ app.use(authMiddleware);
 
 // ── POST /login ────────────────────────────────────────────────────────────
 app.post('/login', (req, res) => {
+  const ip = req.socket.remoteAddress || 'unknown';
+
+  if (isLoginRateLimited(ip)) {
+    return res.status(429).json({ ok: false, error: 'Too many login attempts. Try again in 15 minutes.' });
+  }
+
   const { username, password } = req.body || {};
   if (!username || !password) {
     return res.status(400).json({ ok: false, error: 'Missing username or password' });
@@ -150,9 +184,11 @@ app.post('/login', (req, res) => {
   if (username === storedUsername && configStore.verifyPassword(password, storedHash)) {
     const token = crypto.randomBytes(32).toString('hex');
     activeDashboardTokens.set(token, { createdAt: Date.now() });
+    loginAttempts.delete(ip);
     return res.json({ ok: true, token });
   }
 
+  recordLoginFail(ip);
   res.status(401).json({ ok: false, error: 'Invalid username or password' });
 });
 
@@ -202,12 +238,19 @@ app.get('/config', (req, res) => {
     providers:         safeProviders,
     version:           APP_VERSION,
     commit:            GIT_COMMIT,
+    port:              cfg.port || 51067,
+    activePort:        PORT,
+    httpsEnabled:      !!cfg.httpsEnabled,
+    httpsCertPath:     cfg.httpsCertPath || '',
+    httpsKeyPath:      cfg.httpsKeyPath  || '',
   });
 });
 
 // ── GET /config/full ───────────────────────────────────────────────────────
 // Returns full config including keys (used internally by settings to populate table)
 app.get('/config/full', (req, res) => {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
+  console.log(`[Security] /config/full accessed from ${ip} at ${new Date().toISOString()}`);
   res.json({
     ...cfg,
     dashboardPasswordHash: undefined,
@@ -222,6 +265,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'keyInjectParam', 'keyInjectHeader', 'providers', 'proxyAuthToken',
   'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
+  'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -502,7 +546,6 @@ app.get('/status', (req, res) => {
     return res.json({
       ok: false,
       configured: false,
-      proxyAuthToken: cfg.proxyAuthToken,
       message: 'No providers configured. Open the Settings tab to add API keys.',
       server: { time: new Date().toISOString(), uptime: Math.floor(process.uptime()) },
     });
@@ -511,7 +554,6 @@ app.get('/status', (req, res) => {
   res.json({
     ok: true,
     configured: true,
-    proxyAuthToken: cfg.proxyAuthToken,
     server: { time: new Date().toISOString(), uptime: Math.floor(process.uptime()) },
     pool: {
       totalProviders:          cfg.providers.length,
@@ -912,17 +954,24 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
               proxyRes.on('end', () => {
                 req.off('close', onClientClose);
                 if (!bufferCapped) {
-                  try {
-                    const buf = Buffer.concat(chunks).toString('utf8');
-                    const usageMatch = buf.match(/"usage"\s*:\s*(\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\})/);
-                    if (usageMatch) {
-                      const u = usageMatch[1];
-                      const pm = u.match(/"prompt_tokens"\s*:\s*(\d+)/);
-                      const cm = u.match(/"completion_tokens"\s*:\s*(\d+)/);
-                      const tm = u.match(/"total_tokens"\s*:\s*(\d+)/);
-                      if (pm || cm || tm) streamTokens = { prompt: pm ? parseInt(pm[1],10):0, completion: cm ? parseInt(cm[1],10):0, total: tm ? parseInt(tm[1],10):0 };
-                    }
-                  } catch {}
+                  const buf = Buffer.concat(chunks).toString('utf8');
+                  // Scan SSE lines backwards for the last data chunk containing usage
+                  const lines = buf.split('\n');
+                  for (let li = lines.length - 1; li >= 0; li--) {
+                    const line = lines[li].trim();
+                    if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+                    try {
+                      const parsed = JSON.parse(line.slice(6));
+                      if (parsed.usage && (parsed.usage.total_tokens || parsed.usage.prompt_tokens)) {
+                        streamTokens = {
+                          prompt:     parsed.usage.prompt_tokens     || 0,
+                          completion: parsed.usage.completion_tokens || 0,
+                          total:      parsed.usage.total_tokens      || 0,
+                        };
+                        break;
+                      }
+                    } catch { /* skip malformed line, keep scanning */ }
+                  }
                 }
                 if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, requestedModel);
                 try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
@@ -1072,9 +1121,27 @@ app.use((req, res) => {
 });
 
 // ── Start ──────────────────────────────────────────────────────────────────
-const server = app.listen(PORT, () => {
-  console.log(`\n✅ API Key Router running at http://localhost:${PORT}`);
-  console.log(`   Dashboard : http://localhost:${PORT}/dashboard`);
+let server;
+if (cfg.httpsEnabled && cfg.httpsCertPath && cfg.httpsKeyPath) {
+  try {
+    const tlsOptions = {
+      cert: fs.readFileSync(cfg.httpsCertPath),
+      key:  fs.readFileSync(cfg.httpsKeyPath),
+    };
+    server = https.createServer(tlsOptions, app);
+    console.log('[Server] HTTPS/TLS mode enabled');
+  } catch (e) {
+    console.warn(`[Server] HTTPS cert/key load failed (${e.message}), falling back to HTTP`);
+    server = http.createServer(app);
+  }
+} else {
+  server = http.createServer(app);
+}
+
+const proto = (cfg.httpsEnabled && server instanceof https.Server) ? 'https' : 'http';
+server.listen(PORT, () => {
+  console.log(`\n✅ API Key Router running at ${proto}://localhost:${PORT}`);
+  console.log(`   Dashboard : ${proto}://localhost:${PORT}/dashboard`);
   if (!cfg.providers || cfg.providers.length === 0) {
     console.log(`\n⚠️  No providers configured — open the dashboard and go to Settings!\n`);
   } else {

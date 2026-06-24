@@ -25,6 +25,10 @@ const DEFAULTS = {
   apiModes:          { openai: true, anthropic: false, google: false },
   dashboardUsername: '',
   dashboardPasswordHash: '',
+  port:              51067,
+  httpsEnabled:      false,
+  httpsCertPath:     '',
+  httpsKeyPath:      '',
 };
 
 function generateToken() {
@@ -178,6 +182,11 @@ function save(config) {
   if (!merged.googleProxyToken)    merged.googleProxyToken    = generateToken();
   if (!merged.apiModes || typeof merged.apiModes !== 'object') merged.apiModes = DEFAULTS.apiModes;
   merged.apiModes.openai = true; // OpenAI mode always on
+  const parsedPort = parseInt(merged.port, 10);
+  merged.port = (parsedPort >= 1 && parsedPort <= 65535) ? parsedPort : 51067;
+  merged.httpsEnabled  = !!merged.httpsEnabled;
+  merged.httpsCertPath = String(merged.httpsCertPath || '').trim();
+  merged.httpsKeyPath  = String(merged.httpsKeyPath  || '').trim();
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
   return merged;
 }

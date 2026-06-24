@@ -87,7 +87,8 @@
     .key-item{display:grid;grid-template-columns:28px 1fr auto;align-items:center;gap:10px;padding:11px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;transition:border-color .2s,box-shadow .2s}
     .key-item.is-healthy{border-color:rgba(34,197,94,.4);box-shadow:0 0 0 1px rgba(34,197,94,.08)}
     .key-item.is-running{border-color:rgba(59,130,246,.5);box-shadow:0 0 0 1px rgba(59,130,246,.15),0 0 14px rgba(59,130,246,.07)}
-    .key-item.is-current{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 1px rgba(139,92,246,.2),0 0 18px rgba(139,92,246,.1)}
+    @keyframes reqPing{0%{box-shadow:0 0 0 0 rgba(139,92,246,.7),0 0 0 1px rgba(139,92,246,.2)}60%{box-shadow:0 0 0 10px rgba(139,92,246,0),0 0 0 1px rgba(139,92,246,.2)}100%{box-shadow:0 0 0 10px rgba(139,92,246,0),0 0 0 1px rgba(139,92,246,.2),0 0 18px rgba(139,92,246,.1)}}
+    .key-item.is-current{border-color:rgba(139,92,246,.7);animation:reqPing 1s ease-out forwards}
     .key-item.is-near{border-color:var(--yellow)}
     .key-item.is-exhausted{border-color:var(--red);opacity:.6}
     .key-idx{font-family:var(--font-mono);font-size:11px;color:var(--text-dim);text-align:center}
@@ -874,7 +875,7 @@
     <div class="section-header" style="flex-wrap: wrap; gap: 10px;">
       <div class="section-title">Request Log</div>
       <div style="display: flex; align-items: center; gap: 8px;">
-        <button class="icon-btn" onclick="fetchLogs()" title="Refresh logs">🔄 Refresh</button>
+        <button class="icon-btn" onclick="flashRefresh(this);fetchLogs()" title="Refresh logs">🔄 Refresh</button>
         <button class="icon-btn" onclick="toggleAdvancedFilterPanel()" id="advFilterToggleBtn">⚙️ Advanced Filters</button>
         <button class="icon-btn" onclick="toggleLogFullscreen()" id="fullscreenLogBtn">🖥️ Fullscreen</button>
         <label style="display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; white-space: nowrap;">
@@ -1032,7 +1033,7 @@
           <option value="unchecked">❓ Not Checked</option>
         </select>
         <button class="models-btn" onclick="checkAllModelsAlive()">Check All Alive</button>
-        <button class="icon-btn" onclick="modelTabFetchLogs();fetchStatus()" title="Refresh model directory">🔄 Refresh</button>
+        <button class="icon-btn" onclick="flashRefresh(this);modelTabFetchLogs();fetchStatus()" title="Refresh model directory">🔄 Refresh</button>
       </div>
     </div>
     <!-- Date filter active indicator -->
@@ -1254,6 +1255,35 @@
         <div style="display:flex;align-items:center;gap:12px">
           <button class="save-btn" style="padding:9px 20px;font-size:13px" onclick="changePassword(event)">Update Credentials</button>
           <div class="form-hint" id="passwordChangeStatus" style="font-size:12px;min-height:16px;margin:0"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row: Server Settings -->
+    <div class="card" style="display:flex;flex-direction:column;gap:14px">
+      <div class="section-header" style="border-bottom:1px solid var(--border);padding-bottom:10px;margin-bottom:2px">
+        <div class="section-title" style="margin-bottom:0">🖥️ Server Settings</div>
+        <div id="serverRestartBadge" style="display:none;font-size:11px;color:var(--yellow);font-weight:600;background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);border-radius:5px;padding:2px 8px">⚠️ Restart required to apply port / HTTPS changes</div>
+      </div>
+      <div style="display:grid;grid-template-columns:140px auto 1fr;gap:16px;align-items:end">
+        <div>
+          <label class="form-label" for="serverPort">Port</label>
+          <input class="form-input" id="serverPort" type="number" min="1" max="65535" placeholder="51067" oninput="onServerSettingChange()" style="font-family:var(--font-mono)" />
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;padding-bottom:6px;white-space:nowrap">
+          <input type="checkbox" id="httpsEnabled" onchange="onHttpsToggle()" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0" />
+          <span style="font-size:13px;font-weight:500">Enable HTTPS / TLS</span>
+        </label>
+        <div style="font-size:11px;color:var(--text-muted);padding-bottom:8px">Port and HTTPS changes require a server restart to take effect.</div>
+      </div>
+      <div id="httpsCertFields" style="display:none;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <label class="form-label" for="httpsCertPath">TLS Certificate (.crt / .pem)</label>
+          <input class="form-input" id="httpsCertPath" type="text" placeholder="/etc/ssl/certs/server.crt" oninput="onServerSettingChange()" style="font-family:var(--font-mono);font-size:11px" />
+        </div>
+        <div>
+          <label class="form-label" for="httpsKeyPath">TLS Private Key (.key / .pem)</label>
+          <input class="form-input" id="httpsKeyPath" type="text" placeholder="/etc/ssl/private/server.key" oninput="onServerSettingChange()" style="font-family:var(--font-mono);font-size:11px" />
         </div>
       </div>
     </div>
@@ -1640,6 +1670,13 @@ function authFetch(url, opts = {}) {
   return fetch(url, opts);
 }
 
+function flashRefresh(btn) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '⏳ …';
+  setTimeout(() => { btn.disabled = false; btn.textContent = orig; }, 900);
+}
+
 function showLogin(msg) {
   const overlay = document.getElementById('loginOverlay');
   if (overlay && overlay.style.display === 'flex') return;
@@ -1815,6 +1852,10 @@ function modelTabClearDates() {
 function renderModelsTab() {
   const tbody = document.getElementById('modelTabBody');
   if (!tbody) return;
+
+  // Don't clobber active text selection inside the table
+  const sel = window.getSelection();
+  if (sel && sel.toString().length > 0 && tbody.contains(sel.anchorNode)) return;
 
   const searchInput = document.getElementById('modelTabSearchInput');
   const searchQuery = searchInput ? searchInput.value.toLowerCase().trim() : '';
@@ -2302,12 +2343,6 @@ async function fetchStatus() {
     const r = await authFetch('/status');
     if (r.status === 401) { showLogin('Session expired — please re-enter your token.'); return; }
     const d = await r.json();
-
-    if (d.proxyAuthToken) {
-      _currentToken = d.proxyAuthToken;
-      const patEl = document.getElementById('proxyAuthToken');
-      if (patEl) patEl.value = d.proxyAuthToken;
-    }
 
     const banner = document.getElementById('setupBanner');
     if (!d.configured) {
@@ -3030,6 +3065,10 @@ async function fetchLogs(){
 function renderLogsTable() {
   const tbody = document.getElementById('logBody');
   if (!tbody) return;
+
+  // Don't clobber active text selection inside the table
+  const sel = window.getSelection();
+  if (sel && sel.toString().length > 0 && tbody.contains(sel.anchorNode)) return;
 
   const searchInput = document.getElementById('logSearchInput');
   const statusFilterEl = document.getElementById('logStatusFilter');
@@ -4115,6 +4154,19 @@ async function loadConfig(){
     document.getElementById('keyInjectMode').value=cfg.keyInjectMode||'bearer';
     document.getElementById('keyInjectParam').value=cfg.keyInjectParam||'api_key';
     document.getElementById('keyInjectHeader').value=cfg.keyInjectHeader||'X-API-Key';
+    // Server settings
+    const spEl = document.getElementById('serverPort');
+    const heEl = document.getElementById('httpsEnabled');
+    const cpEl = document.getElementById('httpsCertPath');
+    const kpEl = document.getElementById('httpsKeyPath');
+    if (spEl) spEl.value = cfg.port || 51067;
+    if (heEl) heEl.checked = !!cfg.httpsEnabled;
+    if (cpEl) cpEl.value = cfg.httpsCertPath || '';
+    if (kpEl) kpEl.value = cfg.httpsKeyPath  || '';
+    // Show restart badge if saved port differs from what server is currently listening on
+    const restartBadge = document.getElementById('serverRestartBadge');
+    if (restartBadge) restartBadge.style.display = (cfg.activePort && cfg.port && cfg.activePort !== cfg.port) ? 'block' : 'none';
+    onHttpsToggle();
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
     // If provider list changed, clear stale model cache to force a fresh load
@@ -4300,6 +4352,18 @@ function onRotationModeChange() {
   if (rrGroup) {
     rrGroup.style.display = (mode === 'round-robin' || mode === 'random') ? 'flex' : 'none';
   }
+}
+
+function onHttpsToggle() {
+  const checked = document.getElementById('httpsEnabled')?.checked;
+  const fields  = document.getElementById('httpsCertFields');
+  if (fields) fields.style.display = checked ? 'grid' : 'none';
+  onServerSettingChange();
+}
+
+function onServerSettingChange() {
+  const badge = document.getElementById('serverRestartBadge');
+  if (badge) badge.style.display = 'block';
 }
 
 function updateAuthExample(token){
@@ -4885,6 +4949,10 @@ async function saveConfig(){
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
       google:    document.getElementById('apiModeGoogle')?.checked    || false,
     },
+    port:          parseInt(document.getElementById('serverPort')?.value) || 51067,
+    httpsEnabled:  document.getElementById('httpsEnabled')?.checked || false,
+    httpsCertPath: document.getElementById('httpsCertPath')?.value?.trim() || '',
+    httpsKeyPath:  document.getElementById('httpsKeyPath')?.value?.trim()  || '',
   };
 
   try{
