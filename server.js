@@ -346,7 +346,7 @@ app.post('/config/update', (req, res) => {
 
   console.log('[System] Manual update triggered via dashboard settings...');
   
-  exec('git pull && npm install --omit=dev', (err, stdout, stderr) => {
+  exec('git diff --quiet && git diff --cached --quiet || git stash; git pull && npm install --omit=dev', (err, stdout, stderr) => {
     if (err) {
       console.error('[Update Error] Git pull or npm install failed:', err.message);
       return res.status(500).json({
