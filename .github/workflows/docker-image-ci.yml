@@ -23,16 +23,33 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: dockerhub
     env:
       APP_PORT: ${{ github.event.inputs.port || '51067' }}
       DASHBOARD_USERNAME: ${{ github.event.inputs.dashboard_username || 'admin' }}
       DASHBOARD_PASSWORD: ${{ github.event.inputs.dashboard_password || 'xwitchr@)@^' }}
+      IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/xwitchr
     steps:
       - uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build the Docker image
         run: |
           docker build \
             --build-arg APP_PORT="${APP_PORT}" \
             --build-arg DASHBOARD_USERNAME="${DASHBOARD_USERNAME}" \
             --build-arg DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD}" \
-            --tag xwitchr:${GITHUB_SHA::7} .
+            --tag "${IMAGE_NAME}:${GITHUB_SHA::7}" \
+            --tag "${IMAGE_NAME}:latest" .
+
+      - name: Push the Docker image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push "${IMAGE_NAME}:${GITHUB_SHA::7}"
+          docker push "${IMAGE_NAME}:latest"
