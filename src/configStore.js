@@ -117,6 +117,7 @@ function load() {
     // Seed from .env
     const oldKeys = (process.env.API_KEYS || '').split(',').map(k => k.trim()).filter(Boolean);
     const baseUrl = (process.env.TARGET_API_BASE_URL || '').replace(/\/$/, '');
+    const seededPort = parseInt(process.env.PORT || '51067', 10);
     cfg = {
       ...DEFAULTS,
       proxyAuthToken:    process.env.PROXY_AUTH_TOKEN || generateToken(),
@@ -126,6 +127,7 @@ function load() {
       keyInjectParam:    process.env.KEY_INJECT_PARAM || 'api_key',
       keyInjectHeader:   process.env.KEY_INJECT_HEADER|| 'X-API-Key',
       providers:         oldKeys.map(key => sanitizeProvider({ url: baseUrl, key })),
+      port:              (seededPort >= 1 && seededPort <= 65535) ? seededPort : 51067,
     };
   }
 

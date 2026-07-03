@@ -1,0 +1,38 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+    inputs:
+      port:
+        description: Container port
+        required: false
+        default: "51067"
+      dashboard_username:
+        description: Dashboard username
+        required: false
+        default: "admin"
+      dashboard_password:
+        description: Dashboard password
+        required: false
+        default: "xwitchr@)@^"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      APP_PORT: ${{ github.event.inputs.port || '51067' }}
+      DASHBOARD_USERNAME: ${{ github.event.inputs.dashboard_username || 'admin' }}
+      DASHBOARD_PASSWORD: ${{ github.event.inputs.dashboard_password || 'xwitchr@)@^' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the Docker image
+        run: |
+          docker build \
+            --build-arg APP_PORT="${APP_PORT}" \
+            --build-arg DASHBOARD_USERNAME="${DASHBOARD_USERNAME}" \
+            --build-arg DASHBOARD_PASSWORD="${DASHBOARD_PASSWORD}" \
+            --tag xwitchr:${GITHUB_SHA::7} .
