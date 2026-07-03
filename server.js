@@ -401,8 +401,8 @@ app.post('/provider/models', async (req, res) => {
       httpsAgent:     ipv4HttpsAgent,
     });
 
-    // Google native API may reject bearer auth with 400 — retry with ?key= query param
-    if (response.status === 400 && modelsUrl.includes('googleapis.com')) {
+    // Google native API may reject bearer auth with 400/401 — retry with ?key= query param
+    if ((response.status === 400 || response.status === 401) && modelsUrl.includes('googleapis.com')) {
       const retryUrl = modelsUrl + (modelsUrl.includes('?') ? '&' : '?') + 'key=' + encodeURIComponent(key);
       const retry = await axios.get(retryUrl, { validateStatus: () => true, timeout: 15_000, httpAgent: ipv4HttpAgent, httpsAgent: ipv4HttpsAgent });
       if (retry.status === 200) response = retry;

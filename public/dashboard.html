@@ -2148,6 +2148,8 @@ async function modelsTabCheckModelAliveFromTable(modelName, btn) {
     return;
   }
   
+  if (!(await persistConfigForModelActions())) return;
+
   _modelsTabAliveState[modelName] = 'checking';
   renderModelsTab();
   renderModelsTabManagerList();
@@ -3429,6 +3431,8 @@ async function modelsTabCheckModelAlive(modelName, btn) {
     return { alive: false };
   }
 
+  if (!(await persistConfigForModelActions())) return { alive: false };
+
   _modelsTabAliveState[modelName] = 'checking';
   renderModelsTabManagerList();
   renderModelsTab();
@@ -3505,6 +3509,8 @@ async function modelsTabLoadFromApi() {
     alert('No enabled providers found. Enable at least one provider in Settings first.');
     return;
   }
+
+  if (!(await persistConfigForModelActions())) return;
 
   const btn = document.getElementById('modelsTabLoadBtn');
   const listContainer = document.getElementById('modelsTabModelList');
@@ -4534,6 +4540,8 @@ async function loadModels() {
     return;
   }
 
+  if (!(await persistConfigForModelActions())) return;
+
   const btn = document.getElementById('loadModelsBtn');
   const listContainer = document.getElementById('modelList');
   const origText = btn.textContent;
@@ -4659,6 +4667,7 @@ async function testSelectedModels() {
     alert('Please select/check at least one model to test.');
     return;
   }
+  if (!(await persistConfigForModelActions())) return;
 
   _isTestingModels = true;
   const btn = document.getElementById('testModelsBtn');
@@ -4916,22 +4925,8 @@ async function copySettingsToken(e){
 // ════════════════════════════════════════════════════════════
 // SETTINGS: Save
 // ════════════════════════════════════════════════════════════
-async function saveConfig(){
-  const btn=document.getElementById('saveBtn');
-  const statusEl=document.getElementById('saveStatus');
-
-  // Warn about incomplete rows that will be dropped
-  const incompleteCount = _providers.filter(p => (p.url && !p.key) || (!p.url && p.key)).length;
-  if (incompleteCount > 0) {
-    const ok = confirm(`${incompleteCount} provider row(s) are missing a URL or key and will not be saved. Continue?`);
-    if (!ok) return;
-  }
-
-  btn.disabled=true; btn.textContent='Saving…';
-  statusEl.className='save-status hidden';
-
-  const providers=getProviders();
-  const payload={
+function buildConfigPayload() {
+  return {
     proxyAuthToken:      document.getElementById('proxyAuthToken').value,
     anthropicProxyToken: document.getElementById('anthropicProxyToken')?.value || '',
     googleProxyToken:    document.getElementById('googleProxyToken')?.value    || '',
@@ -4943,7 +4938,7 @@ async function saveConfig(){
     keyInjectMode:     document.getElementById('keyInjectMode').value,
     keyInjectParam:    document.getElementById('keyInjectParam').value.trim()||'api_key',
     keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',
-    providers,
+    providers:         getProviders(),
     apiModes: {
       openai:    true,
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
@@ -4954,22 +4949,55 @@ async function saveConfig(){
     httpsCertPath: document.getElementById('httpsCertPath')?.value?.trim() || '',
     httpsKeyPath:  document.getElementById('httpsKeyPath')?.value?.trim()  || '',
   };
+}
+
+async function persistConfigForModelActions() {
+  return saveConfig({ keepTab: true, silent: true });
+}
+
+async function saveConfig(options = {}){
+  const { keepTab = false, silent = false } = options;
+  const btn=document.getElementById('saveBtn');
+  const statusEl=document.getElementById('saveStatus');
+
+  // Warn about incomplete rows that will be dropped
+  const incompleteCount = _providers.filter(p => (p.url && !p.key) || (!p.url && p.key)).length;
+  if (incompleteCount > 0) {
+    const ok = confirm(incompleteCount + ' provider row(s) are missing a URL or key and will not be saved. Continue?');
+    if (!ok) return false;
+  }
+
+  if (btn && !silent) {
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+  }
+  if (statusEl && !silent) {
+    statusEl.className = 'save-status hidden';
+  }
+
+  const payload = buildConfigPayload();
 
   try{
     const res=await authFetch('/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
     const data=await res.json();
     if(data.ok){
-      showSaveStatus('✅ '+data.message,false,'success');
+      if (!silent) showSaveStatus('✅ ' + data.message,false,'success');
       updateCapBadge();
-      setTimeout(()=>switchTab('monitor'),1200);
+      if (!keepTab) setTimeout(()=>switchTab('monitor'),1200);
+      return true;
     } else {
-      showSaveStatus('❌ '+(data.error||'Unknown error'),false,'error');
+      if (!silent) showSaveStatus('❌ ' + (data.error||'Unknown error'),false,'error');
+      return false;
     }
   }catch(e){
-    showSaveStatus('❌ Network error: '+e.message,false,'error');
+    if (!silent) showSaveStatus('❌ Network error: ' + e.message,false,'error');
+    return false;
+  } finally {
+    if (btn && !silent) {
+      btn.disabled=false;
+      btn.textContent='💾 Save & Apply';
+    }
   }
-
-  btn.disabled=false; btn.textContent='💾 Save & Apply';
 }
 
 function showSaveStatus(msg, hidden, cls){
