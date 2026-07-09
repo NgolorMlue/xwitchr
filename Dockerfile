@@ -4,7 +4,8 @@ WORKDIR /app
 
 ARG APP_PORT=51067
 ARG DASHBOARD_USERNAME=admin
-ARG DASHBOARD_PASSWORD=xwitchr@)@^
+# DASHBOARD_PASSWORD must be set at build-time or run-time — no default for security
+ARG DASHBOARD_PASSWORD
 
 ENV NODE_ENV=production \
     PORT=${APP_PORT} \

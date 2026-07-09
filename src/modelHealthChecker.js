@@ -5,8 +5,8 @@
  *
  * Pings every configured model every 4 hours (or on-demand) with a minimal
  * 1-token request and classifies its response:
- *   - alive  : HTTP 200 within 3 000 ms
- *   - slow   : HTTP 200 but took > 3 000 ms
+ *   - alive  : HTTP 200 within 5 000 ms
+ *   - slow   : HTTP 200 but took > 5 000 ms
  *   - dead   : non-200, timeout, or network error
  *
  * Results are persisted to data/model_health.json and survive restarts.
@@ -52,6 +52,44 @@ class ModelHealthChecker {
 
   _ensureDir() {
     if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  /** Check if a model name matches any exclusion pattern from config. */
+  _isExcluded(modelName) {
+    const cfg = this.getCfg();
+    const excludes = (cfg.healthCheckExclude || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    const mLower = modelName.toLowerCase();
+    return excludes.some(pattern => mLower.includes(pattern));
+  }
+
+  /**
+   * Build a deduplicated URL → { provider, models, keyCount } map from config.
+   * Same endpoint = one entry; models from all providers sharing the URL are merged.
+   */
+  _buildUrlMap() {
+    const cfg = this.getCfg();
+    const urlMap = {}; // url → { provider, models: Set, keyCount }
+    for (const provider of (cfg.providers || [])) {
+      if (provider.enabled === false) continue;
+      const url    = provider.url;
+      const models = (provider.allowedModels && provider.allowedModels.length > 0)
+        ? provider.allowedModels.map(m => (typeof m === 'object' ? m.name : m)).filter(Boolean)
+        : (provider.cachedModels || []).map(String).filter(Boolean);
+
+      if (!urlMap[url]) {
+        urlMap[url] = { provider, models: new Set(), keyCount: 0 };
+      }
+      urlMap[url].keyCount++;
+      for (const m of models) {
+        if (!this._isExcluded(m)) {
+          urlMap[url].models.add(m);
+        }
+      }
+    }
+    return urlMap;
   }
 
   _loadFromDisk() {
@@ -202,39 +240,7 @@ class ModelHealthChecker {
 
     const cfg     = this.getCfg();
 
-    // Parse the exclusions (comma separated list of partial matches)
-    const excludes = (cfg.healthCheckExclude || '')
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean);
-
-    const isExcluded = (modelName) => {
-      const mLower = modelName.toLowerCase();
-      return excludes.some(pattern => mLower.includes(pattern));
-    };
-
-    // ── Deduplicate by URL: same endpoint = one check with the first enabled key.
-    // Models from all providers sharing the same URL are merged (union).
-    // This keeps the checker stealth — the endpoint only sees one probe per model.
-    const urlMap = {}; // url → { provider, models: Set<string> }
-    for (const provider of (cfg.providers || [])) {
-      if (provider.enabled === false) continue;
-      const url    = provider.url;
-      const models = (provider.allowedModels && provider.allowedModels.length > 0)
-        ? provider.allowedModels.map(m => (typeof m === 'object' ? m.name : m)).filter(Boolean)
-        : (provider.cachedModels || []).map(String).filter(Boolean);
-
-      if (!urlMap[url]) {
-        // First key we see for this URL becomes the representative — used for auth
-        urlMap[url] = { provider, models: new Set() };
-      }
-      // Merge models across all providers at the same URL (filtering out excluded models)
-      for (const m of models) {
-        if (!isExcluded(m)) {
-          urlMap[url].models.add(m);
-        }
-      }
-    }
+    const urlMap = this._buildUrlMap();
 
     const tasks = [];
     for (const { provider, models } of Object.values(urlMap)) {
@@ -285,39 +291,16 @@ class ModelHealthChecker {
   _applyHealthToConfig() {
     if (!this.onConfigUpdated) return;
 
-    const cfg     = this.getCfg();
+    // Deep-clone config to avoid race conditions with concurrent dashboard saves (#10)
+    const cfg     = JSON.parse(JSON.stringify(this.getCfg()));
     let   changed = false;
-
-    // Parse the exclusions
-    const excludes = (cfg.healthCheckExclude || '')
-      .split(',')
-      .map(s => s.trim().toLowerCase())
-      .filter(Boolean);
-
-    const isExcluded = (modelName) => {
-      const mLower = modelName.toLowerCase();
-      return excludes.some(pattern => mLower.includes(pattern));
-    };
-
-    // Clean up any legacy `enabled: false` fields in provider configurations to keep Option 1 clean
-    for (const provider of (cfg.providers || [])) {
-      if (!provider.allowedModels) continue;
-      for (let i = 0; i < provider.allowedModels.length; i++) {
-        const entry = provider.allowedModels[i];
-        if (typeof entry === 'object' && 'enabled' in entry) {
-          const { enabled: _removed, ...rest } = entry;
-          provider.allowedModels[i] = rest;
-          changed = true;
-        }
-      }
-    }
 
     // Determine the status of each tested model
     // Group results by model
     const modelResults = {}; // modelName -> { alive: number, dead: number }
     for (const [key, result] of Object.entries(this.results)) {
       const { model, status } = result;
-      if (!model || isExcluded(model)) continue;
+      if (!model || this._isExcluded(model)) continue;
       if (!modelResults[model]) {
         modelResults[model] = { alive: 0, dead: 0 };
       }
@@ -393,22 +376,8 @@ class ModelHealthChecker {
   getResults() {
     const cfg    = this.getCfg();
 
-    // Deduplicate by URL — same as runCheck() so the UI groups identically.
-    // Multiple keys at the same endpoint are shown as one provider group.
-    const urlMap = {}; // url → { provider, models: Set, keyCount }
-    for (const provider of (cfg.providers || [])) {
-      if (provider.enabled === false) continue;
-      const url    = provider.url;
-      const models = (provider.allowedModels && provider.allowedModels.length > 0)
-        ? provider.allowedModels.map(m => (typeof m === 'object' ? m.name : m)).filter(Boolean)
-        : (provider.cachedModels || []).map(String).filter(Boolean);
-
-      if (!urlMap[url]) {
-        urlMap[url] = { provider, models: new Set(), keyCount: 0 };
-      }
-      urlMap[url].keyCount++;
-      for (const m of models) urlMap[url].models.add(m);
-    }
+    // Use shared _buildUrlMap() to get deduplicated providers
+    const urlMap = this._buildUrlMap();
 
     const providerGroups = Object.entries(urlMap).map(([url, { provider, models, keyCount }]) => {
       const domain = url.replace(/^https?:\/\//, '').split('/')[0];

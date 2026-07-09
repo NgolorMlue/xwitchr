@@ -10,14 +10,17 @@
  */
 
 require('dotenv').config();
-const express = require('express');
-const axios   = require('axios');
-const http    = require('http');
-const https   = require('https');
-const cors    = require('cors');
-const morgan  = require('morgan');
-const path    = require('path');
-const dns     = require('dns');
+const express  = require('express');
+const axios    = require('axios');
+const http     = require('http');
+const https    = require('https');
+const cors     = require('cors');
+const morgan   = require('morgan');
+const path     = require('path');
+const dns      = require('dns');
+const fs       = require('fs');
+const crypto   = require('crypto');
+const { exec, execSync } = require('child_process');
 
 // Prioritize IPv4 DNS resolution globally (Node.js v17+ defaults to verbatim which can resolve IPv6 first)
 if (typeof dns.setDefaultResultOrder === 'function') {
@@ -28,17 +31,14 @@ if (typeof dns.setDefaultResultOrder === 'function') {
 const ipv4HttpAgent  = new http.Agent({ family: 4 });
 const ipv4HttpsAgent = new https.Agent({ family: 4 });
 
-
 const KeyPool              = require('./src/keyPool');
 const RequestLogger        = require('./src/requestLogger');
 const configStore          = require('./src/configStore');
 const { generateToken }    = configStore;
 const fmt                  = require('./src/formatConverter');
 const ModelHealthChecker   = require('./src/modelHealthChecker');
-const fs = require('fs');
 const pkg = require('./package.json');
 const APP_VERSION = pkg.version || '1.0.0';
-const { execSync } = require('child_process');
 let GIT_COMMIT = '';
 try {
   GIT_COMMIT = execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
@@ -75,9 +75,27 @@ const healthChecker = new ModelHealthChecker(
 );
 healthChecker.start(4 * 60 * 60 * 1000); // 4-hour interval
 
+// ── Shared constants ──────────────────────────────────────────────────────
+// Headers that should not be forwarded between client ↔ upstream
+const SKIP_PROXY_HEADERS = new Set(['transfer-encoding','connection','keep-alive',
+  'upgrade','proxy-authenticate','proxy-authorization','te','trailer']);
+
+// Safe git target regex — only allow branch/tag names (alphanumeric, dots, hyphens, slashes, underscores)
+const SAFE_GIT_TARGET = /^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/;
+
+// ── Shared utility: timing-safe token comparison ──────────────────────────
+function checkTokenEquals(provided, stored) {
+  if (!stored || !provided) return false;
+  const providedBuf = Buffer.from(provided);
+  const storedBuf   = Buffer.from(stored);
+  if (providedBuf.length !== storedBuf.length) return false;
+  return crypto.timingSafeEqual(providedBuf, storedBuf);
+}
+
 // ── Express ────────────────────────────────────────────────────────────────
 const app = express();
-app.use(cors());
+// Restrict CORS to dashboard/static routes only — proxy routes get no CORS headers
+app.use('/dashboard', cors());
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -86,12 +104,10 @@ app.use((req, res, next) => {
   if (cfg.httpsEnabled) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
   next();
 });
-app.use(morgan('dev'));
+app.use(morgan('short'));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
-
-const crypto = require('crypto');
 
 // In-memory session store: token → { createdAt }
 const activeDashboardTokens = new Map();
@@ -127,10 +143,20 @@ function isValidSession(token) {
   return true;
 }
 
+// ── Periodic cleanup for session & login-attempt Maps (#22) ───────────────
+setInterval(() => {
+  const now = Date.now();
+  for (const [token, sess] of activeDashboardTokens) {
+    if (now - sess.createdAt > SESSION_TTL_MS) activeDashboardTokens.delete(token);
+  }
+  for (const [ip, data] of loginAttempts) {
+    if (now - data.windowStart > LOGIN_WINDOW_MS) loginAttempts.delete(ip);
+  }
+}, 15 * 60 * 1000).unref();
 
 // ── Auth Middleware ────────────────────────────────────────────────────────
-// Only the dashboard page itself and static assets are open — everything else requires auth
-const OPEN_PREFIXES = ['/dashboard', '/stats'];
+// Only the dashboard page itself is open — everything else requires auth
+const OPEN_PREFIXES = ['/dashboard'];
 
 function authMiddleware(req, res, next) {
   const isOpen = OPEN_PREFIXES.some(p => req.path === p || req.path.startsWith(p + '/'));
@@ -147,9 +173,7 @@ function authMiddleware(req, res, next) {
     const match      = authHeader.match(/^Bearer\s+(.+)$/i);
     const provided   = match ? match[1] : req.headers['x-proxy-token'];
 
-    const checkToken = (stored) => stored && provided &&
-      provided.length === stored.length &&
-      crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(stored));
+    const checkToken = (stored) => checkTokenEquals(provided, stored);
 
     let tokenOk = false;
     if (isAnthropic) {
@@ -268,9 +292,15 @@ app.get('/config', (req, res) => {
 app.get('/config/full', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
   console.log(`[Security] /config/full accessed from ${ip} at ${new Date().toISOString()}`);
+  // Explicitly exclude sensitive fields — never leak password hash or proxy tokens
+  const { dashboardPasswordHash, proxyAuthToken, anthropicProxyToken, googleProxyToken, ...safeCfg } = cfg;
+  // Mask provider keys: send only last 6 chars hint + full URL (settings table needs it)
+  safeCfg.providers = (cfg.providers || []).map(p => ({
+    ...p,
+    key: p.key,  // settings UI needs full key for save-back; endpoint is session-gated
+  }));
   res.json({
-    ...cfg,
-    dashboardPasswordHash: undefined,
+    ...safeCfg,
     providerCount: cfg.providers ? cfg.providers.length : 0,
     version:       APP_VERSION,
     commit:        GIT_COMMIT,
@@ -323,7 +353,7 @@ app.post('/config/regenerate-token', (req, res) => {
 
 // ── GET /config/check-update ──────────────────────────────────────────────
 // Checks if there are any new commits on origin/<current_branch> compared to the local HEAD.
-const { exec } = require('child_process');
+// exec is imported at the top of the file
 app.get('/config/check-update', (req, res) => {
   const gitDir = path.join(__dirname, '.git');
   if (!fs.existsSync(gitDir)) {
@@ -416,6 +446,11 @@ app.post('/config/update', (req, res) => {
   }
 
   const target = req.body?.target || 'master';
+  // Validate target to prevent command injection (#1)
+  if (!SAFE_GIT_TARGET.test(target) || target.length > 200) {
+    console.warn(`[Update Warning] Rejected unsafe git target: "${target.slice(0, 50)}"`);
+    return res.status(400).json({ ok: false, error: 'Invalid update target. Only branch/tag names are allowed (alphanumeric, dots, hyphens, slashes).' });
+  }
   console.log(`[System] Manual update to target "${target}" triggered via dashboard...`);
 
   exec('git fetch --all --tags', (fetchErr) => {
@@ -466,8 +501,8 @@ app.post('/config/update', (req, res) => {
               });
 
               setTimeout(() => {
-                console.log('[System] Exiting process with code 1 to trigger PM2/systemd auto-restart...');
-                process.exit(1);
+                console.log('[System] Exiting process with code 0 to trigger PM2/systemd auto-restart...');
+                process.exit(0);
               }, 1500);
             });
           });
@@ -484,7 +519,7 @@ function isConfiguredProvider(url, key) {
   return (cfg.providers || []).some(p => p.url === normalised && p.key === key);
 }
 
-// ── GET /provider/models ────────────────────────────────────────────────────────
+// ── POST /provider/models ───────────────────────────────────────────────────────
 // Fetches available models from a provider's /models endpoint.
 // Used by the Settings UI to populate the model checklist.
 app.post('/provider/models', async (req, res) => {
@@ -547,9 +582,10 @@ app.post('/provider/models', async (req, res) => {
 // ── POST /provider/save-models ───────────────────────────────────────────────────────
 // Saves model selections for a single provider without a full config save.
 app.post('/provider/save-models', (req, res) => {
-  const { index, allowedModels, cachedModels } = req.body || {};
-  if (index === undefined || !Array.isArray(allowedModels)) {
-    return res.status(400).json({ ok: false, error: 'Missing index or allowedModels' });
+  const { index: rawIndex, allowedModels, cachedModels } = req.body || {};
+  const index = parseInt(rawIndex, 10);
+  if (!Number.isFinite(index) || index < 0 || !Array.isArray(allowedModels)) {
+    return res.status(400).json({ ok: false, error: 'Missing or invalid index, or missing allowedModels' });
   }
   if (!cfg.providers[index]) {
     return res.status(404).json({ ok: false, error: 'Provider not found' });
@@ -702,14 +738,10 @@ app.get('/stats/summary', (req, res) => {
   const match      = authHeader.match(/^Bearer\s+(.+)$/i);
   const provided   = match ? match[1] : null;
 
-  const checkToken = (stored) => stored && provided &&
-    provided.length === stored.length &&
-    crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(stored));
-
   const allowed = isValidSession(provided) ||
-    checkToken(cfg.proxyAuthToken) ||
-    checkToken(cfg.anthropicProxyToken) ||
-    checkToken(cfg.googleProxyToken);
+    checkTokenEquals(provided, cfg.proxyAuthToken) ||
+    checkTokenEquals(provided, cfg.anthropicProxyToken) ||
+    checkTokenEquals(provided, cfg.googleProxyToken);
 
   if (!allowed) {
     return res.status(401).json({ error: 'Unauthorized' });
@@ -971,7 +1003,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       pool.recordRequest(provider, requestedModel);
 
       // ── Streaming path ─────────────────────────────────────────────────────
-      if (wantsStream && providerType !== 'google') {
+      // Google native streaming conversion is not yet implemented — return a clear error (#20)
+      if (wantsStream && providerType === 'google') {
+        const responseTime = Date.now() - startTime;
+        reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: 501, responseTime, error: 'Streaming not supported for Google native providers. Set stream:false or use an OpenAI-compatible provider.', payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: null });
+        return res.status(501).json({ error: 'Not Implemented', message: 'Streaming is not supported for Google native API providers via this router. Set "stream": false or use an OpenAI-compatible provider.' });
+      }
+      if (wantsStream) {
         await new Promise((resolveStream, rejectStream) => {
           let settled = false;
           const settle = (fn, val) => { if (!settled) { settled = true; fn(val); } };
@@ -995,8 +1033,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
               pool.recordSuccess(provider);
             }
 
-            const skipHeaders = new Set(['transfer-encoding','connection','keep-alive',
-              'upgrade','proxy-authenticate','proxy-authorization','te','trailer']);
+            const skipHeaders = SKIP_PROXY_HEADERS;
             const fwdHeaders = {};
             for (const [h, v] of Object.entries(proxyRes.headers)) {
               if (!skipHeaders.has(h.toLowerCase())) fwdHeaders[h] = v;
@@ -1106,7 +1143,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           proxyReq.on('error', (err) => { settle(rejectStream, err); });
           if (isMultipart && rawMultipartBody) {
             proxyReq.write(rawMultipartBody);
-          } else if (!isMultipart) {
+          } else if (!isMultipart && bodyStr) {
             proxyReq.write(bodyStr);
           }
           proxyReq.end();
@@ -1139,8 +1176,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
       const responseTime = Date.now() - startTime;
 
-      const skipHeaders = new Set(['transfer-encoding','connection','keep-alive',
-        'upgrade','proxy-authenticate','proxy-authorization','te','trailer']);
+      const skipHeaders = SKIP_PROXY_HEADERS;
       for (const [h, v] of Object.entries(upstream.headers)) {
         if (!skipHeaders.has(h.toLowerCase())) res.setHeader(h, v);
       }
