@@ -23,6 +23,7 @@ const DEFAULTS = {
   keyInjectHeader:   'X-API-Key',
   providers:         [],
   apiModes:          { openai: true, anthropic: false, google: false },
+  disabledModels:    [],
   dashboardUsername: '',
   dashboardPasswordHash: '',
   port:              51067,
@@ -142,6 +143,8 @@ function load() {
   // Ensure all providers have the new fields
   cfg.providers = (cfg.providers || []).map(sanitizeProvider).filter(p => p.url && p.key);
 
+  cfg.disabledModels = Array.isArray(cfg.disabledModels) ? cfg.disabledModels.map(String) : [];
+
   // Seed / generate dashboard credentials
   if (!cfg.dashboardUsername) {
     cfg.dashboardUsername = process.env.DASHBOARD_USERNAME || 'admin';
@@ -193,6 +196,7 @@ function save(config) {
   merged.httpsEnabled  = !!merged.httpsEnabled;
   merged.httpsCertPath = String(merged.httpsCertPath || '').trim();
   merged.httpsKeyPath  = String(merged.httpsKeyPath  || '').trim();
+  merged.disabledModels = Array.isArray(merged.disabledModels) ? merged.disabledModels.map(String) : (existing.disabledModels || []);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
   return merged;
 }

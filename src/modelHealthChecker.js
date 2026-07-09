@@ -287,7 +287,6 @@ class ModelHealthChecker {
 
     const cfg     = this.getCfg();
     let   changed = false;
-    const urlSeen = new Set();
 
     // Parse the exclusions
     const excludes = (cfg.healthCheckExclude || '')
@@ -300,70 +299,59 @@ class ModelHealthChecker {
       return excludes.some(pattern => mLower.includes(pattern));
     };
 
+    // Clean up any legacy `enabled: false` fields in provider configurations to keep Option 1 clean
     for (const provider of (cfg.providers || [])) {
-      if (provider.enabled === false) continue;
-      const url = provider.url;
-
-      // Only apply changes for the representative key of each unique URL
-      if (urlSeen.has(url)) continue;
-      urlSeen.add(url);
-
-      // If allowedModels is empty and we have health results via cachedModels,
-      // materialise the list so individual models can be toggled.
-      if ((!provider.allowedModels || provider.allowedModels.length === 0) &&
-          (provider.cachedModels  || []).length > 0) {
-        const hasAnyResult = (provider.cachedModels || []).some(
-          m => this.results[this._key(url, String(m))]
-        );
-        if (hasAnyResult) {
-          provider.allowedModels = (provider.cachedModels || []).map(m => ({ name: String(m) }));
-          changed = true;
-        }
-      }
-
-      if (!provider.allowedModels || provider.allowedModels.length === 0) continue;
-
+      if (!provider.allowedModels) continue;
       for (let i = 0; i < provider.allowedModels.length; i++) {
-        const entry     = provider.allowedModels[i];
-        const modelName = typeof entry === 'object' ? entry.name : entry;
-        const key       = this._key(url, modelName);
-        const result    = this.results[key];
-
-        // If the model is explicitly excluded, ensure it is re-enabled if previously disabled, then ignore.
-        if (isExcluded(modelName)) {
-          if (typeof entry === 'object' && entry.enabled === false) {
-            const { enabled: _removed, ...rest } = entry;
-            provider.allowedModels[i] = rest;
-            changed = true;
-            console.log(`[HealthChecker] ✅ Re-enabled excluded model: ${modelName} (${url.replace(/^https?:\/\//, '').split('/')[0]})`);
-          }
-          continue;
-        }
-
-        if (!result || result.status === 'unknown') continue;
-
-        const shouldDisable = result.status === 'dead';
-        const isDisabled    = typeof entry === 'object' && entry.enabled === false;
-
-        if (shouldDisable && !isDisabled) {
-          // Convert string entry to object if needed, then mark disabled
-          provider.allowedModels[i] = typeof entry === 'object'
-            ? { ...entry, enabled: false }
-            : { name: entry, enabled: false };
-          changed = true;
-          console.log(`[HealthChecker] ⛔ Disabled dead model: ${modelName} (${url.replace(/^https?:\/\//, '').split('/')[0]})`);
-
-        } else if (!shouldDisable && isDisabled) {
-          // Re-enable: remove the enabled:false flag
+        const entry = provider.allowedModels[i];
+        if (typeof entry === 'object' && 'enabled' in entry) {
           const { enabled: _removed, ...rest } = entry;
           provider.allowedModels[i] = rest;
           changed = true;
-          console.log(`[HealthChecker] ✅ Re-enabled model: ${modelName} (${url.replace(/^https?:\/\//, '').split('/')[0]})`);
         }
       }
     }
 
+    // Determine the status of each tested model
+    // Group results by model
+    const modelResults = {}; // modelName -> { alive: number, dead: number }
+    for (const [key, result] of Object.entries(this.results)) {
+      const { model, status } = result;
+      if (!model || isExcluded(model)) continue;
+      if (!modelResults[model]) {
+        modelResults[model] = { alive: 0, dead: 0 };
+      }
+      if (status === 'dead') {
+        modelResults[model].dead++;
+      } else if (status === 'alive' || status === 'slow') {
+        modelResults[model].alive++;
+      }
+    }
+
+    // Load current disabledModels
+    const currentDisabled = new Set(cfg.disabledModels || []);
+    const nextDisabled = new Set(currentDisabled);
+
+    for (const [model, counts] of Object.entries(modelResults)) {
+      const totalChecks = counts.alive + counts.dead;
+      if (totalChecks === 0) continue;
+
+      const isDead = counts.dead > 0 && counts.alive === 0;
+      const isAlive = counts.alive > 0;
+
+      if (isDead && !nextDisabled.has(model)) {
+        nextDisabled.add(model);
+        changed = true;
+        console.log(`[HealthChecker] ⛔ Globally disabled dead model: ${model}`);
+      } else if (isAlive && nextDisabled.has(model)) {
+        nextDisabled.delete(model);
+        changed = true;
+        console.log(`[HealthChecker] ✅ Globally re-enabled model: ${model}`);
+      }
+    }
+
     if (changed) {
+      cfg.disabledModels = Array.from(nextDisabled);
       console.log('[HealthChecker] Updating config with new model health states…');
       this.onConfigUpdated(cfg);
     }

@@ -55,7 +55,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -280,6 +280,7 @@ app.get('/config', (req, res) => {
     dashboardUsername: cfg.dashboardUsername,
     providerCount:     safeProviders.length,
     providers:         safeProviders,
+    disabledModels:    cfg.disabledModels || [],
     version:           APP_VERSION,
     commit:            GIT_COMMIT,
     port:              cfg.port || 51067,
@@ -310,7 +311,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude',
+  'healthCheckExclude', 'disabledModels',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -349,7 +350,7 @@ app.post('/config/regenerate-token', (req, res) => {
 });
 
 // ── GET /config/check-update ──────────────────────────────────────────────
-// Checks if there are any new commits on origin/master compared to the local HEAD.
+// Checks if there are any new commits on origin/<current_branch> compared to the local HEAD.
 const { exec } = require('child_process');
 app.get('/config/check-update', (req, res) => {
   const gitDir = path.join(__dirname, '.git');
@@ -363,58 +364,144 @@ app.get('/config/check-update', (req, res) => {
       return res.json({ ok: false, available: false, error: 'Failed to fetch updates from GitHub: ' + fetchErr.message });
     }
 
-    exec('git rev-list --count HEAD..origin/master', (diffErr, stdout) => {
-      if (diffErr) {
-        console.warn('[Update Check] git rev-list failed:', diffErr.message);
-        return res.json({ ok: false, available: false, error: 'Failed to check commit difference: ' + diffErr.message });
+    exec('git rev-parse --abbrev-ref HEAD', (branchErr, currentBranchStdout) => {
+      const branch = (branchErr || !currentBranchStdout) ? 'master' : currentBranchStdout.trim();
+      const originBranch = `origin/${branch}`;
+
+      exec(`git rev-list --count HEAD..${originBranch}`, (diffErr, stdout) => {
+        if (diffErr) {
+          console.warn(`[Update Check] git rev-list failed for ${originBranch}:`, diffErr.message);
+          return res.json({ ok: false, available: false, error: 'Failed to check commit difference: ' + diffErr.message });
+        }
+
+        const count = parseInt(stdout.trim(), 10) || 0;
+        res.json({
+          ok: true,
+          available: count > 0,
+          commitsBehind: count
+        });
+      });
+    });
+  });
+});
+
+// ── GET /config/update-targets ──────────────────────────────────────────────
+// Returns all remote branches and tags available for the app to switch/update to.
+app.get('/config/update-targets', (req, res) => {
+  const gitDir = path.join(__dirname, '.git');
+  if (!fs.existsSync(gitDir)) {
+    return res.json({ ok: false, branches: [], tags: [], error: 'Not running inside a Git repository.' });
+  }
+
+  exec('git fetch --all --tags', (fetchErr) => {
+    if (fetchErr) {
+      console.warn('[Update Targets] git fetch failed, using local cache:', fetchErr.message);
+    }
+
+    exec('git branch -r', (branchErr, branchStdout) => {
+      if (branchErr) {
+        return res.status(500).json({ ok: false, error: 'Failed to list branches: ' + branchErr.message });
       }
 
-      const count = parseInt(stdout.trim(), 10) || 0;
-      res.json({
-        ok: true,
-        available: count > 0,
-        commitsBehind: count
+      exec('git tag', (tagErr, tagStdout) => {
+        if (tagErr) {
+          return res.status(500).json({ ok: false, error: 'Failed to list tags: ' + tagErr.message });
+        }
+
+        const branches = branchStdout.split('\n')
+          .map(line => line.trim())
+          .filter(line => line && !line.includes('origin/HEAD') && line.startsWith('origin/'))
+          .map(line => line.replace(/^origin\//, ''))
+          .filter(Boolean);
+
+        const uniqueBranches = Array.from(new Set(branches)).sort();
+
+        const tags = tagStdout.split('\n')
+          .map(line => line.trim())
+          .filter(Boolean)
+          .sort();
+
+        res.json({
+          ok: true,
+          branches: uniqueBranches,
+          tags: tags
+        });
       });
     });
   });
 });
 
 // ── POST /config/update ───────────────────────────────────────────────────
-// Performs git pull and npm install to update the app, then exits to let PM2/systemd restart it.
+// Performs checkout of a branch/tag and npm install to update the app, then restarts.
 app.post('/config/update', (req, res) => {
   const gitDir = path.join(__dirname, '.git');
   if (!fs.existsSync(gitDir)) {
     console.warn('[Update Warning] Blocked: Project is not running inside a Git repository (likely running in Docker).');
     return res.status(400).json({
       ok: false,
-      error: 'In-app update is only supported when running directly from a Git clone (non-Docker). For Docker deployments, please use Watchtower or rebuild the image.'
+      error: 'In-app update is only supported when running directly from a Git clone (non-Docker).'
     });
   }
 
-  console.log('[System] Manual update triggered via dashboard settings...');
-  
-  exec('git diff --quiet && git diff --cached --quiet || git stash; git pull && npm install --omit=dev', (err, stdout, stderr) => {
-    if (err) {
-      console.error('[Update Error] Git pull or npm install failed:', err.message);
-      return res.status(500).json({
-        ok: false,
-        error: 'Update script failed: ' + err.message,
-        log: stderr || err.message
-      });
-    }
-    
-    console.log('[Update Success] App updated. Output:\n', stdout);
-    res.json({
-      ok: true,
-      message: 'Update successful! Exiting server to allow PM2/systemd to auto-restart the process.',
-      log: stdout
-    });
+  const target = req.body?.target || 'master';
+  console.log(`[System] Manual update to target "${target}" triggered via dashboard...`);
 
-    // Exit process after a short delay so the response finishes sending
-    setTimeout(() => {
-      console.log('[System] Exiting process with code 1 to trigger PM2/systemd auto-restart...');
-      process.exit(1);
-    }, 1500);
+  exec('git fetch --all --tags', (fetchErr) => {
+    if (fetchErr) {
+      console.error('[Update Error] git fetch failed:', fetchErr.message);
+      return res.status(500).json({ ok: false, error: 'git fetch failed: ' + fetchErr.message });
+    }
+
+    exec('git diff --quiet && git diff --cached --quiet', (dirtyErr) => {
+      const isClean = !dirtyErr;
+      const checkoutCmd = isClean ? `git checkout "${target}"` : `git stash && git checkout "${target}"`;
+
+      exec(checkoutCmd, (checkoutErr, checkoutOut, checkoutErrOut) => {
+        if (checkoutErr) {
+          console.error('[Update Error] git checkout failed:', checkoutErr.message);
+          return res.status(500).json({
+            ok: false,
+            error: `git checkout "${target}" failed: ` + checkoutErr.message,
+            log: checkoutErrOut || checkoutErr.message
+          });
+        }
+
+        exec(`git tag -l "${target}"`, (tagErr, tagStdout) => {
+          const isTag = tagStdout.trim() === target;
+          const pullCmd = isTag ? 'echo "Target is a tag — skipping pull"' : `git pull origin "${target}"`;
+
+          exec(pullCmd, (pullErr, pullOut, pullErrOut) => {
+            if (pullErr && !isTag) {
+              console.warn('[Update Warning] git pull failed (might be a detached HEAD/tag):', pullErr.message);
+            }
+
+            exec('npm install --omit=dev', (npmErr, npmOut, npmErrOut) => {
+              if (npmErr) {
+                console.error('[Update Error] npm install failed:', npmErr.message);
+                return res.status(500).json({
+                  ok: false,
+                  error: 'npm install failed: ' + npmErr.message,
+                  log: npmErrOut || npmErr.message
+                });
+              }
+
+              const combinedLog = [checkoutOut, pullOut, npmOut].filter(Boolean).join('\n');
+              console.log('[Update Success] App updated to target:', target);
+              res.json({
+                ok: true,
+                message: `Update successful! App switched to "${target}" and is restarting.`,
+                log: combinedLog
+              });
+
+              setTimeout(() => {
+                console.log('[System] Exiting process with code 1 to trigger PM2/systemd auto-restart...');
+                process.exit(1);
+              }, 1500);
+            });
+          });
+        });
+      });
+    });
   });
 });
 
