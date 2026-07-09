@@ -1470,8 +1470,14 @@
       <div style="background:var(--border);margin:16px 0"></div>
 
       <!-- Right: Update controls -->
-      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:10px;justify-content:center">
+      <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;justify-content:center">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">System Updates</div>
+        <div style="display:flex;flex-direction:column;gap:4px">
+          <label class="form-label" for="updateTargetSelect" style="margin:0;font-size:11px">Update to Branch / Tag</label>
+          <select class="form-select" id="updateTargetSelect" style="font-size:12.5px;height:32px;padding:4px 8px;cursor:pointer;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;outline:none">
+            <option value="">-- Loading Branch / Tag --</option>
+          </select>
+        </div>
         <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%">🔄 Update App from GitHub</button>
         <div id="updateStatusText" style="font-size:11px;color:var(--text-muted);min-height:14px;line-height:1.5;text-align:center"></div>
         <pre id="updateLogOutput" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
@@ -1856,7 +1862,10 @@ function switchTab(tab) {
   document.getElementById('page-' + tab).classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'settings') loadConfig();
-  if (tab === 'profile') loadConfig();
+  if (tab === 'profile') {
+    loadConfig();
+    fetchUpdateTargets();
+  }
   if (tab === 'models') {
     loadConfig();
     renderModelsTab();
@@ -5236,50 +5245,62 @@ async function triggerAppUpdate() {
   logEl.style.display = 'none';
   logEl.textContent = '';
 
-  try {
-    const checkRes = await authFetch('/config/check-update');
-    const checkData = await checkRes.json();
+  const targetSelect = document.getElementById('updateTargetSelect');
+  const target = targetSelect ? targetSelect.value : '';
 
-    if (checkData.ok) {
-      _updateAvailable = checkData.available;
-      if (!_updateAvailable) {
-        if (!confirm('No new updates are available. Do you want to force reinstall the current version anyway?')) {
-          btn.disabled = false;
-          statusEl.textContent = 'App is up to date.';
-          statusEl.style.color = 'var(--green)';
-          return;
+  if (target) {
+    if (!confirm(`Switch app branch/version to "${target}"? This will checkout the target and run npm install.`)) {
+      btn.disabled = false;
+      statusEl.textContent = '';
+      return;
+    }
+  } else {
+    try {
+      const checkRes = await authFetch('/config/check-update');
+      const checkData = await checkRes.json();
+
+      if (checkData.ok) {
+        _updateAvailable = checkData.available;
+        if (!_updateAvailable) {
+          if (!confirm('No new updates are available on the current branch. Do you want to force reinstall the current version anyway?')) {
+            btn.disabled = false;
+            statusEl.textContent = 'App is up to date.';
+            statusEl.style.color = 'var(--green)';
+            return;
+          }
+        } else {
+          if (!confirm(`Update available! (${checkData.commitsBehind} commit(s) behind). Do you want to pull and install it now?`)) {
+            btn.disabled = false;
+            statusEl.textContent = `Update available! (${checkData.commitsBehind} commit(s) behind)`;
+            statusEl.style.color = 'var(--yellow)';
+            return;
+          }
         }
       } else {
-        if (!confirm(`Update available! (${checkData.commitsBehind} commit(s) behind). Do you want to pull and install it now?`)) {
+        if (!confirm('Could not verify updates: ' + (checkData.error || 'Unknown error') + '\n\nDo you want to attempt the update anyway?')) {
           btn.disabled = false;
-          statusEl.textContent = `Update available! (${checkData.commitsBehind} commit(s) behind)`;
-          statusEl.style.color = 'var(--yellow)';
+          statusEl.textContent = checkData.error || 'Update check failed.';
           return;
         }
       }
-    } else {
-      if (!confirm('Could not verify updates: ' + (checkData.error || 'Unknown error') + '\n\nDo you want to attempt the update anyway?')) {
+    } catch (err) {
+      if (!confirm('Failed to check updates: ' + err.message + '\n\nDo you want to attempt the update anyway?')) {
         btn.disabled = false;
-        statusEl.textContent = checkData.error || 'Update check failed.';
+        statusEl.textContent = 'Failed to check updates.';
         return;
       }
-    }
-  } catch (err) {
-    if (!confirm('Failed to check updates: ' + err.message + '\n\nDo you want to attempt the update anyway?')) {
-      btn.disabled = false;
-      statusEl.textContent = 'Failed to check updates.';
-      return;
     }
   }
 
   btn.textContent = '⚙️ Updating...';
-  statusEl.textContent = 'Running updates on the server (git pull & npm install)...';
+  statusEl.textContent = target ? `Switching app to "${target}" and running npm install...` : 'Running updates on the server (git pull & npm install)...';
   statusEl.style.color = 'var(--text-muted)';
 
   try {
     const res = await authFetch('/config/update', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: target || undefined })
     });
     
     const data = await res.json();
@@ -5592,6 +5613,50 @@ async function triggerHealthCheck() {
     if (iconEl) iconEl.textContent = '🔍';
     if (textEl) textEl.textContent = 'Check Now';
     console.warn('[Health] trigger error:', err.message);
+  }
+}
+
+async function fetchUpdateTargets() {
+  const select = document.getElementById('updateTargetSelect');
+  if (!select) return;
+  try {
+    const res = await authFetch('/config/update-targets');
+    if (res.status === 401) return;
+    const data = await res.json();
+    if (data.ok) {
+      const currentVal = select.value;
+      select.innerHTML = '<option value="">-- Current Branch / Master --</option>';
+
+      if (data.branches && data.branches.length > 0) {
+        const branchGroup = document.createElement('optgroup');
+        branchGroup.label = 'Branches';
+        data.branches.forEach(branch => {
+          const opt = document.createElement('option');
+          opt.value = branch;
+          opt.textContent = branch;
+          branchGroup.appendChild(opt);
+        });
+        select.appendChild(branchGroup);
+      }
+
+      if (data.tags && data.tags.length > 0) {
+        const tagGroup = document.createElement('optgroup');
+        tagGroup.label = 'Versions / Tags';
+        data.tags.forEach(tag => {
+          const opt = document.createElement('option');
+          opt.value = tag;
+          opt.textContent = tag;
+          tagGroup.appendChild(opt);
+        });
+        select.appendChild(tagGroup);
+      }
+
+      if (currentVal && select.querySelector(`option[value="${currentVal}"]`)) {
+        select.value = currentVal;
+      }
+    }
+  } catch (e) {
+    console.warn('[Update Targets] failed to fetch:', e.message);
   }
 }
 </script>
