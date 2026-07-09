@@ -5500,24 +5500,40 @@ function renderHealthTab(data) {
     container.appendChild(card);
 
     const modelList = card.querySelector('.health-model-list');
+    
+    // Parse exclusions
+    const excludesInput = document.getElementById('healthCheckExclude');
+    const currentExcludes = excludesInput ? excludesInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
     for (const m of (prov.models || [])) {
-      const st      = m.status || 'unknown';
-      const latMs   = m.latencyMs;
+      const mLower = m.model.toLowerCase();
+      const isExcluded = currentExcludes.some(pattern => mLower.includes(pattern));
+      
+      const st      = isExcluded ? 'unknown' : (m.status || 'unknown');
+      const latMs   = isExcluded ? null : m.latencyMs;
       const barPct  = latMs != null ? Math.min(100, Math.round((latMs / MAX_LATENCY_MS) * 100)) : 0;
       const latLabel = latMs != null ? (latMs >= 1000 ? `${(latMs/1000).toFixed(1)}s` : `${latMs}ms`) : '—';
-      const ageStr  = m.lastChecked ? _fmtHealthAge(m.lastChecked) : 'not checked';
-      const errTip  = m.error ? `<div class="health-error-tip" title="${escHtml(m.error)}">⚠ ${escHtml(m.error.slice(0,80))}${m.error.length>80?'…':''}</div>` : '';
+      const ageStr  = isExcluded ? 'excluded' : (m.lastChecked ? _fmtHealthAge(m.lastChecked) : 'not checked');
+      const errTip  = (!isExcluded && m.error) ? `<div class="health-error-tip" title="${escHtml(m.error)}">⚠ ${escHtml(m.error.slice(0,80))}${m.error.length>80?'…':''}</div>` : '';
+
+      const excludeCheckbox = `<label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text-muted);cursor:pointer;margin:0 12px 0 0;" onclick="event.stopPropagation()">
+        <input type="checkbox" ${isExcluded ? 'checked' : ''} onchange="toggleModelExclusion('${escHtml(m.model)}', this.checked)" style="width:13px;height:13px;accent-color:var(--accent);cursor:pointer;" />
+        <span>Exclude Check</span>
+      </label>`;
 
       const row = document.createElement('div');
       row.className = 'health-model-row';
+      if (isExcluded) row.style.opacity = '0.6';
+      
       row.innerHTML = `
         <div class="health-status-dot ${st}"></div>
-        <div style="min-width:0">
+        <div style="min-width:0;flex:1;">
           <div class="health-model-name" title="${escHtml(m.model)}">${escHtml(m.model)}</div>
           ${errTip}
         </div>
-        <div>
-          <span class="health-status-badge ${st}">${st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown'}</span>
+        <div style="display:flex;align-items:center;gap:12px;margin-right:16px;">
+          ${excludeCheckbox}
+          <span class="health-status-badge ${st}">${isExcluded ? '🚫 Excluded' : (st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown')}</span>
         </div>
         <div class="health-latency-wrap">
           <div class="health-latency-bar-bg"><div class="health-latency-bar-fill ${st}" style="width:${barPct}%"></div></div>
@@ -5712,6 +5728,31 @@ function updateModelStatusSummary() {
       return `<span style="display: inline-flex; align-items: center; padding: 3px 8px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; color: var(--red); font-size: 11px; font-family: var(--font-mono); font-weight: 500;">${escHtml(m)}</span>`;
     }).join('');
   }
+}
+
+async function toggleModelExclusion(modelName, exclude) {
+  const inputEl = document.getElementById('healthCheckExclude');
+  if (!inputEl) return;
+  
+  let excludes = inputEl.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const mLower = modelName.toLowerCase();
+  
+  if (exclude) {
+    // Add to exclusions if not already present
+    if (!excludes.includes(mLower)) {
+      excludes.push(mLower);
+    }
+  } else {
+    // Remove from exclusions
+    excludes = excludes.filter(s => s !== mLower);
+  }
+  
+  inputEl.value = excludes.join(', ');
+  
+  // Save silently
+  await persistConfigForModelActions();
+  // Fetch fresh health data to reflect the changes (since exclusions change check statuses)
+  await fetchHealthData();
 }
 </script>
 </body>
