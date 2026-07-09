@@ -2031,8 +2031,13 @@ function renderModelsTab() {
   const enabledProviders = _poolKeys ? _poolKeys.filter(k => k.enabled !== false) : [];
   const modelsSet = new Set();
   enabledProviders.forEach(k => {
-    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
-    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+    const list = (k.allowedModels && k.allowedModels.length > 0)
+      ? k.allowedModels.map(modelEntryName)
+      : (k.cachedModels || []);
+    list.forEach(m => {
+      const name = modelEntryName(m);
+      if (name) modelsSet.add(name);
+    });
   });
   _activeLogs.forEach(log => {
     if (log.model) modelsSet.add(log.model);
@@ -5693,8 +5698,13 @@ function getAllKnownModels() {
   const modelsSet = new Set();
   const keys = _poolKeys || [];
   keys.forEach(k => {
-    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
-    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+    const list = (k.allowedModels && k.allowedModels.length > 0)
+      ? k.allowedModels.map(modelEntryName)
+      : (k.cachedModels || []);
+    list.forEach(m => {
+      const name = modelEntryName(m);
+      if (name) modelsSet.add(name);
+    });
   });
   _activeLogs.forEach(log => {
     if (log.model) modelsSet.add(log.model);
