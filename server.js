@@ -29,11 +29,12 @@ const ipv4HttpAgent  = new http.Agent({ family: 4 });
 const ipv4HttpsAgent = new https.Agent({ family: 4 });
 
 
-const KeyPool       = require('./src/keyPool');
-const RequestLogger = require('./src/requestLogger');
-const configStore   = require('./src/configStore');
-const { generateToken } = configStore;
-const fmt = require('./src/formatConverter');
+const KeyPool              = require('./src/keyPool');
+const RequestLogger        = require('./src/requestLogger');
+const configStore          = require('./src/configStore');
+const { generateToken }    = configStore;
+const fmt                  = require('./src/formatConverter');
+const ModelHealthChecker   = require('./src/modelHealthChecker');
 const fs = require('fs');
 const pkg = require('./package.json');
 const APP_VERSION = pkg.version || '1.0.0';
@@ -58,6 +59,49 @@ function buildPool(c) {
 }
 
 const reqLogger = new RequestLogger(200);
+
+// ── Model Health Checker ───────────────────────────────────────────────────
+const healthChecker = new ModelHealthChecker(
+  () => cfg,
+  ipv4HttpAgent,
+  ipv4HttpsAgent,
+  // onConfigUpdated: called after health check flips model enabled flags.
+  // Mirrors changes to ALL providers sharing the same URL, saves to disk, rebuilds pool.
+  (updatedCfg) => {
+    // Build a per-URL model→enabled state map from the representative provider
+    const urlModelState = {};
+    for (const p of (updatedCfg.providers || [])) {
+      if (!urlModelState[p.url]) {
+        urlModelState[p.url] = {};
+        for (const e of (p.allowedModels || [])) {
+          const name = typeof e === 'object' ? e.name : e;
+          urlModelState[p.url][name] = typeof e === 'object' ? e.enabled : undefined;
+        }
+      }
+    }
+    // Mirror changes to every other key at the same URL
+    for (const p of (updatedCfg.providers || [])) {
+      const stateMap = urlModelState[p.url];
+      if (!stateMap || !p.allowedModels) continue;
+      for (let i = 0; i < p.allowedModels.length; i++) {
+        const e    = p.allowedModels[i];
+        const name = typeof e === 'object' ? e.name : e;
+        if (!(name in stateMap)) continue;
+        const targetEnabled = stateMap[name];
+        if (targetEnabled === false) {
+          p.allowedModels[i] = typeof e === 'object' ? { ...e, enabled: false } : { name: e, enabled: false };
+        } else if (typeof e === 'object' && e.enabled === false) {
+          const { enabled: _removed, ...rest } = e;
+          p.allowedModels[i] = rest;
+        }
+      }
+    }
+    cfg  = configStore.save(updatedCfg);
+    pool = buildPool(cfg);
+    console.log('[HealthChecker] Pool rebuilt with updated model health states');
+  }
+);
+healthChecker.start(4 * 60 * 60 * 1000); // 4-hour interval
 
 // ── Express ────────────────────────────────────────────────────────────────
 const app = express();
@@ -281,6 +325,8 @@ app.post('/config', (req, res) => {
     const saved = configStore.save({ ...cfg, ...patch });
     cfg  = saved;
     pool = buildPool(cfg);
+    // Re-run health check immediately so new providers/models are probed right away
+    healthChecker.runCheck().catch(e => console.warn('[HealthChecker] Post-config check error:', e.message));
     console.log(`[Config] Updated — ${cfg.providers.length} providers`);
     res.json({ ok: true, message: `Config saved. ${cfg.providers.length} providers loaded.`, providerCount: cfg.providers.length });
   } catch (err) {
@@ -539,6 +585,22 @@ app.post('/provider/test-model', async (req, res) => {
   }
 });
 
+
+// ── GET /health/models ────────────────────────────────────────────────────
+// Returns the latest model health results, grouped by provider.
+app.get('/health/models', (req, res) => {
+  res.json(healthChecker.getResults());
+});
+
+// ── POST /health/models/check ──────────────────────────────────────────────
+// Triggers an immediate health check (non-blocking — runs async in background).
+app.post('/health/models/check', (req, res) => {
+  if (healthChecker._running) {
+    return res.json({ ok: false, message: 'A check is already in progress. Please wait.' });
+  }
+  healthChecker.runCheck().catch(e => console.warn('[HealthChecker] Manual check error:', e.message));
+  res.json({ ok: true, message: 'Health check started. Results will be available in a few seconds.' });
+});
 
 // ── GET /status ────────────────────────────────────────────────────────────
 app.get('/status', (req, res) => {

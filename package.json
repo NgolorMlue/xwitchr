@@ -17,5 +17,17 @@
   },
   "devDependencies": {
     "nodemon": "^3.0.2"
+  },
+  "nodemonConfig": {
+    "ignore": [
+      "config.json",
+      "data/*",
+      ".env"
+    ],
+    "watch": [
+      "server.js",
+      "src/"
+    ],
+    "ext": "js"
   }
 }

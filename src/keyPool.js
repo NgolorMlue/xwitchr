@@ -100,7 +100,11 @@ class KeyPool {
     if (!model) return true;
     const allowed = p.allowedModels;
     if (!allowed || allowed.length === 0) return true;
-    return allowed.some(e => (typeof e === 'object' ? e.name : e) === model);
+    const entry = allowed.find(e => (typeof e === 'object' ? e.name : e) === model);
+    if (!entry) return false;
+    // Honour health-checker-managed disable flag
+    if (typeof entry === 'object' && entry.enabled === false) return false;
+    return true;
   }
 
   _isOffline(id) {

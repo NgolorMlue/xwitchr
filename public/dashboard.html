@@ -349,6 +349,55 @@
     .login-btn:hover{opacity:.9}
     .login-error{margin-top:10px;font-size:12px;color:var(--red);min-height:18px}
 
+    /* ── Health Tab ── */
+    .health-pill{display:flex;align-items:center;gap:6px;padding:5px 13px;border-radius:99px;font-size:12px;font-weight:600}
+    .health-pill .health-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+    .health-pill-alive{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:var(--green)}
+    .health-pill-alive .health-dot{background:var(--green)}
+    .health-pill-slow{background:rgba(234,179,8,.1);border:1px solid rgba(234,179,8,.25);color:var(--yellow)}
+    .health-pill-slow .health-dot{background:var(--yellow)}
+    .health-pill-dead{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.25);color:var(--red)}
+    .health-pill-dead .health-dot{background:var(--red)}
+    .health-pill-unknown{background:rgba(107,122,153,.1);border:1px solid rgba(107,122,153,.25);color:var(--text-muted)}
+    .health-pill-unknown .health-dot{background:var(--text-muted)}
+    .health-check-btn{display:flex;align-items:center;gap:7px;padding:9px 18px;background:linear-gradient(135deg,var(--accent),var(--purple));border:none;border-radius:9px;color:#fff;font-size:13px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:opacity .15s,transform .1s;white-space:nowrap}
+    .health-check-btn:hover{opacity:.88}
+    .health-check-btn:active{transform:scale(.97)}
+    .health-check-btn:disabled{opacity:.45;cursor:not-allowed}
+    .health-provider-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .health-provider-header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--surface2);border-bottom:1px solid var(--border)}
+    .health-provider-domain{font-family:var(--font-mono);font-size:13px;font-weight:600;color:var(--text)}
+    .health-provider-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text-muted)}
+    .health-type-badge{padding:2px 8px;border-radius:5px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+    .health-type-openai{background:rgba(59,130,246,.12);color:var(--accent)}
+    .health-type-anthropic{background:rgba(168,85,247,.12);color:var(--purple)}
+    .health-type-google{background:rgba(52,211,153,.12);color:#34d399}
+    .health-model-list{display:flex;flex-direction:column}
+    .health-model-row{display:grid;grid-template-columns:20px 1fr 120px 100px 120px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
+    .health-model-row:last-child{border-bottom:none}
+    .health-model-row:hover{background:var(--surface2)}
+    .health-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+    .health-status-dot.alive{background:var(--green);box-shadow:0 0 6px rgba(34,197,94,.5)}
+    .health-status-dot.slow{background:var(--yellow);box-shadow:0 0 6px rgba(234,179,8,.5)}
+    .health-status-dot.dead{background:var(--red);box-shadow:0 0 6px rgba(239,68,68,.4)}
+    .health-status-dot.unknown{background:var(--text-dim)}
+    .health-model-name{font-family:var(--font-mono);font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .health-status-badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:99px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+    .health-status-badge.alive{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.2)}
+    .health-status-badge.slow{background:rgba(234,179,8,.12);color:var(--yellow);border:1px solid rgba(234,179,8,.2)}
+    .health-status-badge.dead{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+    .health-status-badge.unknown{background:rgba(107,122,153,.1);color:var(--text-muted);border:1px solid rgba(107,122,153,.2)}
+    .health-latency-wrap{display:flex;flex-direction:column;gap:3px}
+    .health-latency-bar-bg{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+    .health-latency-bar-fill{height:100%;border-radius:2px;transition:width .5s ease}
+    .health-latency-bar-fill.alive{background:var(--green)}
+    .health-latency-bar-fill.slow{background:var(--yellow)}
+    .health-latency-bar-fill.dead{background:var(--red)}
+    .health-latency-val{font-family:var(--font-mono);font-size:10px;color:var(--text-muted)}
+    .health-error-tip{font-size:10px;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--font-mono)}
+    .health-age{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap}
+    @media(max-width:680px){.health-model-row{grid-template-columns:14px 1fr 90px;}.health-model-row > :nth-child(4),.health-model-row > :nth-child(5){display:none}}
+
     /* ── Fullscreen Request Log & Advanced Filters ── */
     .card.fullscreen {
       position: fixed;
@@ -687,6 +736,7 @@
       <button class="tab-btn" id="tab-models" onclick="switchTab('models')">🤖 Models</button>
       <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
       <button class="tab-btn" id="tab-profile" onclick="switchTab('profile')">👤 Profile</button>
+      <button class="tab-btn" id="tab-health" onclick="switchTab('health')">🩺 Health</button>
     </nav>
   </div>
   <div class="header-right">
@@ -1421,6 +1471,59 @@
   </div>
 </div>
 
+<!-- ══ HEALTH ══ -->
+<div class="page fade-in" id="page-health">
+
+  <!-- Summary Bar -->
+  <div class="card" style="padding:18px 24px">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div style="font-size:13px;font-weight:700;color:var(--text);letter-spacing:-.01em">🩺 Model Health</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;flex:1">
+        <div class="health-pill health-pill-alive" id="healthCountAlive"><span class="health-dot"></span><span id="healthNumAlive">—</span> Alive</div>
+        <div class="health-pill health-pill-slow" id="healthCountSlow"><span class="health-dot"></span><span id="healthNumSlow">—</span> Slow</div>
+        <div class="health-pill health-pill-dead" id="healthCountDead"><span class="health-dot"></span><span id="healthNumDead">—</span> Dead</div>
+        <div class="health-pill health-pill-unknown" id="healthCountUnknown" style="display:none"><span class="health-dot"></span><span id="healthNumUnknown">—</span> Unchecked</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0">
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">Last Checked</div>
+          <div style="font-size:12px;color:var(--text-muted);font-family:var(--font-mono)" id="healthLastChecked">—</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">Next Check</div>
+          <div style="font-size:12px;color:var(--accent);font-family:var(--font-mono);font-weight:600" id="healthNextCheck">—</div>
+        </div>
+        <button class="health-check-btn" id="healthCheckNowBtn" onclick="triggerHealthCheck()">
+          <span id="healthCheckBtnIcon">🔍</span>
+          <span id="healthCheckBtnText">Check Now</span>
+        </button>
+      </div>
+    </div>
+    <!-- Progress bar shown while checking -->
+    <div id="healthCheckProgress" style="display:none;margin-top:14px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-bottom:6px">
+        <span>Running health check across all models…</span>
+        <span id="healthProgressTimer">0s</span>
+      </div>
+      <div style="height:4px;background:var(--border);border-radius:2px;overflow:hidden">
+        <div id="healthProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent),var(--purple));border-radius:2px;transition:width .4s ease"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Empty state -->
+  <div id="healthEmptyState" class="card" style="display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:48px;text-align:center">
+    <div style="font-size:40px">🩺</div>
+    <div style="font-size:15px;font-weight:600;color:var(--text)">No models configured</div>
+    <div style="font-size:13px;color:var(--text-muted);max-width:400px">Add providers and configure their model lists in Settings, then come back here to see live health status.</div>
+    <button class="save-btn" style="margin-top:4px" onclick="switchTab('settings')">Go to Settings →</button>
+  </div>
+
+  <!-- Provider groups -->
+  <div id="healthProviderList" style="display:flex;flex-direction:column;gap:16px"></div>
+
+</div><!-- end health -->
+
 <!-- ══ MODEL MODAL ══ -->
 <div id="modelModal" class="modal-overlay" style="display:none" onclick="onModalOverlayClick(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
@@ -1746,6 +1849,9 @@ function switchTab(tab) {
   if (tab === 'models') {
     loadConfig();
     renderModelsTab();
+  }
+  if (tab === 'health') {
+    fetchHealthData();
   }
   if (tab === 'statistics') {
     if (_lineChart) {
@@ -5244,6 +5350,235 @@ function pollServerRestart() {
       statusEl.style.color = 'var(--yellow)';
     }
   }, 1000);
+}
+
+// ════════════════════════════════════════════════════════════
+// HEALTH TAB
+// ════════════════════════════════════════════════════════════
+let _healthAutoRefreshTimer = null;
+let _healthCheckProgressTimer = null;
+let _healthProgressStart = null;
+
+async function fetchHealthData() {
+  try {
+    const res  = await authFetch('/health/models');
+    if (res.status === 401) { showLogin(); return; }
+    const data = await res.json();
+    renderHealthTab(data);
+  } catch (e) {
+    console.warn('[Health] fetch error:', e.message);
+  }
+}
+
+function _fmtHealthAge(isoStr) {
+  if (!isoStr) return 'never';
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60)   return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+  return `${Math.floor(diff/3600)}h ago`;
+}
+
+function _fmtCountdown(isoStr) {
+  if (!isoStr) return '—';
+  const diff = Math.max(0, Math.floor((new Date(isoStr) - Date.now()) / 1000));
+  if (diff === 0) return 'now';
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  const s = diff % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function renderHealthTab(data) {
+  if (!data) return;
+
+  // ── Counters ──────────────────────────────────────────────
+  let alive = 0, slow = 0, dead = 0, unknown = 0;
+  for (const p of (data.providers || [])) {
+    for (const m of (p.models || [])) {
+      if      (m.status === 'alive')   alive++;
+      else if (m.status === 'slow')    slow++;
+      else if (m.status === 'dead')    dead++;
+      else                             unknown++;
+    }
+  }
+  document.getElementById('healthNumAlive').textContent   = alive;
+  document.getElementById('healthNumSlow').textContent    = slow;
+  document.getElementById('healthNumDead').textContent    = dead;
+  document.getElementById('healthNumUnknown').textContent = unknown;
+  const unknownPill = document.getElementById('healthCountUnknown');
+  if (unknownPill) unknownPill.style.display = unknown > 0 ? '' : 'none';
+
+  // ── Timestamps ────────────────────────────────────────────
+  const lastEl = document.getElementById('healthLastChecked');
+  const nextEl = document.getElementById('healthNextCheck');
+  if (lastEl) lastEl.textContent = data.lastChecked ? _fmtHealthAge(data.lastChecked) : 'Never';
+  if (nextEl) nextEl.textContent = data.nextCheck   ? _fmtCountdown(data.nextCheck)   : '—';
+
+  // Keep countdown live while tab is active
+  clearInterval(_healthAutoRefreshTimer);
+  _healthAutoRefreshTimer = setInterval(() => {
+    if (document.getElementById('page-health')?.classList.contains('active')) {
+      if (nextEl) nextEl.textContent = data.nextCheck ? _fmtCountdown(data.nextCheck) : '—';
+      if (lastEl && data.lastChecked) lastEl.textContent = _fmtHealthAge(data.lastChecked);
+    } else {
+      clearInterval(_healthAutoRefreshTimer);
+    }
+  }, 1000);
+
+  // ── Running state ─────────────────────────────────────────
+  const checkBtn = document.getElementById('healthCheckNowBtn');
+  const progressEl = document.getElementById('healthCheckProgress');
+  if (data.running) {
+    if (checkBtn) { checkBtn.disabled = true; document.getElementById('healthCheckBtnText').textContent = 'Checking…'; }
+    if (progressEl) progressEl.style.display = '';
+  } else {
+    if (checkBtn) { checkBtn.disabled = false; document.getElementById('healthCheckBtnText').textContent = 'Check Now'; document.getElementById('healthCheckBtnIcon').textContent = '🔍'; }
+    if (progressEl) progressEl.style.display = 'none';
+  }
+
+  // ── Empty state ───────────────────────────────────────────
+  const totalModels = (data.providers || []).reduce((s, p) => s + (p.models || []).length, 0);
+  document.getElementById('healthEmptyState').style.display    = totalModels === 0 ? 'flex' : 'none';
+  document.getElementById('healthProviderList').style.display  = totalModels === 0 ? 'none' : '';
+
+  // ── Provider cards ────────────────────────────────────────
+  const container = document.getElementById('healthProviderList');
+  if (!container) return;
+  container.innerHTML = '';
+
+  const MAX_LATENCY_MS = 10_000; // 10s = full bar
+
+  for (const prov of (data.providers || [])) {
+    const typeCls = `health-type-${prov.type || 'openai'}`;
+    const keysLabel = prov.keyCount > 1 ? `${prov.keyCount} keys` : '1 key';
+
+    const card = document.createElement('div');
+    card.className = 'health-provider-card';
+    card.innerHTML = `
+      <div class="health-provider-header">
+        <div class="health-provider-domain">${escHtml(prov.domain)}</div>
+        <div class="health-provider-meta">
+          <span class="health-type-badge ${escHtml(typeCls)}">${escHtml(prov.type || 'openai')}</span>
+          <span>${escHtml(keysLabel)} · ${(prov.models||[]).length} model${(prov.models||[]).length !== 1 ? 's' : ''}</span>
+        </div>
+      </div>
+      <div class="health-model-list" id="hml-${escHtml(prov.domain)}"></div>
+    `;
+    container.appendChild(card);
+
+    const modelList = card.querySelector('.health-model-list');
+    for (const m of (prov.models || [])) {
+      const st      = m.status || 'unknown';
+      const latMs   = m.latencyMs;
+      const barPct  = latMs != null ? Math.min(100, Math.round((latMs / MAX_LATENCY_MS) * 100)) : 0;
+      const latLabel = latMs != null ? (latMs >= 1000 ? `${(latMs/1000).toFixed(1)}s` : `${latMs}ms`) : '—';
+      const ageStr  = m.lastChecked ? _fmtHealthAge(m.lastChecked) : 'not checked';
+      const errTip  = m.error ? `<div class="health-error-tip" title="${escHtml(m.error)}">⚠ ${escHtml(m.error.slice(0,80))}${m.error.length>80?'…':''}</div>` : '';
+
+      const row = document.createElement('div');
+      row.className = 'health-model-row';
+      row.innerHTML = `
+        <div class="health-status-dot ${st}"></div>
+        <div style="min-width:0">
+          <div class="health-model-name" title="${escHtml(m.model)}">${escHtml(m.model)}</div>
+          ${errTip}
+        </div>
+        <div>
+          <span class="health-status-badge ${st}">${st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown'}</span>
+        </div>
+        <div class="health-latency-wrap">
+          <div class="health-latency-bar-bg"><div class="health-latency-bar-fill ${st}" style="width:${barPct}%"></div></div>
+          <div class="health-latency-val">${latLabel}</div>
+        </div>
+        <div class="health-age">${ageStr}</div>
+      `;
+      modelList.appendChild(row);
+    }
+  }
+}
+
+function escHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function triggerHealthCheck() {
+  const btn      = document.getElementById('healthCheckNowBtn');
+  const iconEl   = document.getElementById('healthCheckBtnIcon');
+  const textEl   = document.getElementById('healthCheckBtnText');
+  const progressEl = document.getElementById('healthCheckProgress');
+  const timerEl  = document.getElementById('healthProgressTimer');
+  const barEl    = document.getElementById('healthProgressBar');
+
+  if (btn)    btn.disabled = true;
+  if (iconEl) iconEl.textContent = '⏳';
+  if (textEl) textEl.textContent = 'Starting…';
+
+  try {
+    const res  = await authFetch('/health/models/check', { method: 'POST' });
+    const data = await res.json();
+
+    if (!data.ok) {
+      // Already running
+      if (textEl) textEl.textContent = 'Already running';
+      setTimeout(() => { if (textEl) textEl.textContent = 'Check Now'; if (iconEl) iconEl.textContent = '🔍'; if (btn) btn.disabled = false; }, 2000);
+      return;
+    }
+
+    // Show progress bar and start elapsed timer
+    if (progressEl) progressEl.style.display = '';
+    if (textEl) textEl.textContent = 'Checking…';
+    _healthProgressStart = Date.now();
+    clearInterval(_healthCheckProgressTimer);
+    let barWidth = 2;
+    _healthCheckProgressTimer = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - _healthProgressStart) / 1000);
+      if (timerEl) timerEl.textContent = `${elapsed}s`;
+      // Indeterminate animation: creep toward 95%, never reach 100%
+      barWidth = Math.min(95, barWidth + (95 - barWidth) * 0.03);
+      if (barEl) barEl.style.width = `${barWidth.toFixed(1)}%`;
+    }, 500);
+
+    // Poll until running = false
+    let polls = 0;
+    const pollFn = async () => {
+      polls++;
+      try {
+        const r = await authFetch('/health/models');
+        const d = await r.json();
+        if (!d.running) {
+          clearInterval(_healthCheckProgressTimer);
+          if (barEl) barEl.style.width = '100%';
+          setTimeout(() => {
+            if (progressEl) progressEl.style.display = 'none';
+            if (barEl) barEl.style.width = '0%';
+            if (btn) btn.disabled = false;
+            if (iconEl) iconEl.textContent = '🔍';
+            if (textEl) textEl.textContent = 'Check Now';
+            renderHealthTab(d);
+          }, 600);
+          return;
+        }
+        // Keep polling every 3s (up to 5 min)
+        if (polls < 100) setTimeout(pollFn, 3000);
+        else {
+          clearInterval(_healthCheckProgressTimer);
+          if (btn) btn.disabled = false;
+          if (textEl) textEl.textContent = 'Check Now';
+          if (iconEl) iconEl.textContent = '🔍';
+        }
+      } catch { /* ignore transient errors */ }
+    };
+    setTimeout(pollFn, 3000);
+
+  } catch (err) {
+    if (btn)    btn.disabled = false;
+    if (iconEl) iconEl.textContent = '🔍';
+    if (textEl) textEl.textContent = 'Check Now';
+    console.warn('[Health] trigger error:', err.message);
+  }
 }
 </script>
 </body>
