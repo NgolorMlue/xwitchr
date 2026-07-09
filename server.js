@@ -55,7 +55,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -280,6 +280,7 @@ app.get('/config', (req, res) => {
     dashboardUsername: cfg.dashboardUsername,
     providerCount:     safeProviders.length,
     providers:         safeProviders,
+    disabledModels:    cfg.disabledModels || [],
     version:           APP_VERSION,
     commit:            GIT_COMMIT,
     port:              cfg.port || 51067,
@@ -310,7 +311,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude',
+  'healthCheckExclude', 'disabledModels',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────

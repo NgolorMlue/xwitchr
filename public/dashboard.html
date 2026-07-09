@@ -2103,8 +2103,7 @@ function renderModelsTab() {
   if (activeCountEl) activeCountEl.textContent = mostActiveCount > 0 ? `${mostActiveCount} request${mostActiveCount > 1 ? 's' : ''}` : 'No requests yet';
 
   const filteredRows = modelRowsData.filter(row => {
-    // Only show enabled models (checked in manager); if allowed list empty = all enabled
-    if (_modelsTabAllowed.length > 0 && !_modelsTabAllowed.includes(row.name)) return false;
+    if (_disabledModels.includes(row.name)) return false;
 
     const matchesSearch = !searchQuery || row.name.toLowerCase().includes(searchQuery);
     if (!matchesSearch) return false;
@@ -2159,7 +2158,7 @@ function renderModelsTab() {
     const rtText = row.avgLatency > 0 ? `${row.avgLatency}ms` : '—';
 
 
-    const isChecked = _modelsTabAllowed.length === 0 || _modelsTabAllowed.includes(row.name);
+    const isChecked = !_disabledModels.includes(row.name);
     const checkboxHtml = `<input type="checkbox" value="${escHtml(row.name)}" ${isChecked ? 'checked' : ''} onchange="toggleModelTabCheckbox(this)" style="cursor:pointer;" />`;
 
     const aliveStatus = _modelsTabAliveState[row.name];
@@ -2217,28 +2216,11 @@ function sortModelTab(col) {
 
 function toggleModelTabCheckbox(cb) {
   const modelName = cb.value;
-  if (_modelsTabAllowed.length === 0) {
-    const modelsSet = new Set();
-    if (_poolKeys) {
-      _poolKeys.forEach(k => {
-        if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
-        if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
-      });
-    }
-    _activeLogs.forEach(log => {
-      if (log.model) modelsSet.add(log.model);
-    });
-    _modelsTabAllowed = Array.from(modelsSet);
-  }
-  
   if (cb.checked) {
-    if (!_modelsTabAllowed.includes(modelName)) {
-      _modelsTabAllowed.push(modelName);
-    }
+    _disabledModels = _disabledModels.filter(m => m !== modelName);
   } else {
-    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+    if (!_disabledModels.includes(modelName)) _disabledModels.push(modelName);
   }
-  
   renderModelsTab();
   renderModelsTabManagerList();
 }
@@ -2297,20 +2279,9 @@ async function modelsTabCheckModelAliveFromTable(modelName, btn) {
   
   _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
   if (!alive) {
-    if (_modelsTabAllowed.length === 0) {
-      const modelsSet = new Set();
-      if (_poolKeys) {
-        _poolKeys.forEach(k => {
-          if (k.allowedModels) k.allowedModels.forEach(m => modelsSet.add(m));
-          if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
-        });
-      }
-      _activeLogs.forEach(log => {
-        if (log.model) modelsSet.add(log.model);
-      });
-      _modelsTabAllowed = Array.from(modelsSet);
-    }
-    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+    if (!_disabledModels.includes(modelName)) _disabledModels.push(modelName);
+  } else {
+    _disabledModels = _disabledModels.filter(m => m !== modelName);
   }
   
   renderModelsTab();
@@ -2387,20 +2358,9 @@ async function checkAllModelsAlive() {
       
       _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
       if (!alive) {
-        if (_modelsTabAllowed.length === 0) {
-          const modelsSet = new Set();
-          if (_poolKeys) {
-            _poolKeys.forEach(k => {
-              if (k.allowedModels) k.allowedModels.forEach(m => modelsSet.add(m));
-              if (k.cachedModels) k.cachedModels.forEach(m => modelsSet.add(m));
-            });
-          }
-          _activeLogs.forEach(log => {
-            if (log.model) modelsSet.add(log.model);
-          });
-          _modelsTabAllowed = Array.from(modelsSet);
-        }
-        _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+        if (!_disabledModels.includes(modelName)) _disabledModels.push(modelName);
+      } else {
+        _disabledModels = _disabledModels.filter(m => m !== modelName);
       }
     }));
     renderModelsTab();
@@ -2461,6 +2421,7 @@ function renderKey(k) {
 // ════════════════════════════════════════════════════════════
 let _currentToken = '';
 let _poolKeys = [];
+let _disabledModels = [];
 let _modelsTabAliveState = {};
 let _serverTokenStats = null; // all-time stats from /status
 
@@ -3412,7 +3373,6 @@ function toggleLogFullscreen() {
 // _modelsTabModelProviders: { modelName: [providerIndex, ...] }
 let _modelsTabModelProviders = {};
 let _modelsTabCached = [];
-let _modelsTabAllowed = [];
 let _modelsTabModelLimits = {}; // { modelName: { rpm: number|null, tpm: number|null } }
 let _modelTabSort = { col: 'name', dir: 'asc' };
 
@@ -3458,7 +3418,7 @@ function renderModelsTabManagerList() {
   }
 
   listContainer.innerHTML = filteredModels.map((m, idx) => {
-    const isChecked = _modelsTabAllowed.includes(m);
+    const isChecked = !_disabledModels.includes(m);
     const providerIndices = _modelsTabModelProviders[m] || [];
     let providerLabel = '';
     if (providerIndices.length === 0) {
@@ -3513,18 +3473,18 @@ function renderModelsTabManagerList() {
     `;
   }).join('');
   
-  document.getElementById('modelsTabSelCount').textContent = _modelsTabAllowed.length;
+  document.getElementById('modelsTabSelCount').textContent = _modelsTabCached.length - _disabledModels.length;
   document.getElementById('modelsTabTotCount').textContent = _modelsTabCached.length;
 }
 
 function toggleModelsTabCheckbox(cb) {
   const val = cb.value;
   if (cb.checked) {
-    if (!_modelsTabAllowed.includes(val)) _modelsTabAllowed.push(val);
+    _disabledModels = _disabledModels.filter(m => m !== val);
   } else {
-    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== val);
+    if (!_disabledModels.includes(val)) _disabledModels.push(val);
   }
-  document.getElementById('modelsTabSelCount').textContent = _modelsTabAllowed.length;
+  document.getElementById('modelsTabSelCount').textContent = _modelsTabCached.length - _disabledModels.length;
   renderModelsTab();
 }
 
@@ -3535,14 +3495,14 @@ function modelsTabSetModelLimit(modelName, field, value) {
 }
 
 function modelsTabSelectAll() {
-  _modelsTabAllowed = [..._modelsTabCached];
+  _disabledModels = [];
   renderModelsTabManagerList();
   renderModelsTab();
 }
 
 // ── Selection management helpers ──
 function modelsTabDeselectAll() {
-  _modelsTabAllowed = [];
+  _disabledModels = [..._modelsTabCached];
   renderModelsTabManagerList();
   renderModelsTab();
 }
@@ -3582,7 +3542,9 @@ async function modelsTabCheckModelAlive(modelName, btn) {
   _modelsTabAliveState[modelName] = alive ? 'alive' : 'dead';
 
   if (!alive) {
-    _modelsTabAllowed = _modelsTabAllowed.filter(m => m !== modelName);
+    if (!_disabledModels.includes(modelName)) _disabledModels.push(modelName);
+  } else {
+    _disabledModels = _disabledModels.filter(m => m !== modelName);
   }
 
   renderModelsTabManagerList();
@@ -3703,12 +3665,8 @@ async function modelsTabLoadFromApi() {
     if (!_modelsTabModelLimits[m]) _modelsTabModelLimits[m] = { rpm: null, tpm: null };
   });
 
-  // Keep only previously allowed models that still exist
-  _modelsTabAllowed = _modelsTabAllowed.filter(m => _modelsTabCached.includes(m));
-  // If nothing was previously allowed, default to all allowed
-  if (_modelsTabAllowed.length === 0 && _modelsTabCached.length > 0) {
-    _modelsTabAllowed = [..._modelsTabCached];
-  }
+  // Keep only previously disabled models that still exist
+  _disabledModels = _disabledModels.filter(m => _modelsTabCached.includes(m));
   
   renderModelsTabManagerList();
   
@@ -3735,11 +3693,6 @@ async function modelsTabSaveSelection() {
   statusEl.className = 'save-status';
   statusEl.style.color = 'var(--accent)';
   
-  let allOk = true;
-  const errors = [];
-  
-  // Save to each provider: set allowedModels to the global selection, 
-  // and cachedModels to only the models that provider actually supports
   for (let i = 0; i < _providers.length; i++) {
     const p = _providers[i];
     if (!p.url || !p.key) continue;
@@ -4303,6 +4256,7 @@ async function loadConfig(){
     onHttpsToggle();
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
+    _disabledModels = cfg.disabledModels || [];
     // If provider list changed, clear stale model cache to force a fresh load
     if (_providers.length !== prevProviderCount) {
       _modelsTabCached = [];
@@ -5056,6 +5010,7 @@ async function copySettingsToken(e){
 function buildConfigPayload() {
   return {
     proxyAuthToken:      document.getElementById('proxyAuthToken').value,
+    disabledModels:      _disabledModels,
     anthropicProxyToken: document.getElementById('anthropicProxyToken')?.value || '',
     googleProxyToken:    document.getElementById('googleProxyToken')?.value    || '',
     rotationThreshold: parseInt(document.getElementById('rotationThreshold').value)||32,
