@@ -373,7 +373,7 @@
     .health-type-anthropic{background:rgba(168,85,247,.12);color:var(--purple)}
     .health-type-google{background:rgba(52,211,153,.12);color:#34d399}
     .health-model-list{display:flex;flex-direction:column}
-    .health-model-row{display:grid;grid-template-columns:20px 1fr 120px 100px 120px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
+    .health-model-row{display:grid;grid-template-columns:20px 100px 1fr 120px 100px 120px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
     .health-model-row:last-child{border-bottom:none}
     .health-model-row:hover{background:var(--surface2)}
     .health-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -396,7 +396,7 @@
     .health-latency-val{font-family:var(--font-mono);font-size:10px;color:var(--text-muted)}
     .health-error-tip{font-size:10px;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--font-mono)}
     .health-age{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap}
-    @media(max-width:680px){.health-model-row{grid-template-columns:14px 1fr 90px;}.health-model-row > :nth-child(4),.health-model-row > :nth-child(5){display:none}}
+    @media(max-width:680px){.health-model-row{grid-template-columns:14px 90px 1fr 90px;}.health-model-row > :nth-child(5),.health-model-row > :nth-child(6){display:none}}
 
     /* ── Fullscreen Request Log & Advanced Filters ── */
     .card.fullscreen {
@@ -1001,67 +1001,101 @@
 
   <!-- API Provider Model Manager Card -->
   <div class="card" id="modelsTabManagerCard">
-    <div class="section-header" style="flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px;">
+    <div class="section-header" style="flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; cursor: pointer; user-select: none;" onclick="toggleCardCollapse('modelsTabManagerCard')">
       <div style="display: flex; align-items: center; gap: 10px;">
         <div class="section-title" style="margin-bottom: 0;">🗝️ Provider Model Enable/Disable Manager</div>
       </div>
-      <div style="display: flex; align-items: center; gap: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-left: auto;" onclick="event.stopPropagation()">
         <button class="load-models-btn" id="modelsTabLoadBtn" onclick="modelsTabLoadFromApi()" style="padding: 6px 14px; font-size: 12px;">⬇️ Load Models from All Providers</button>
       </div>
+      <span class="collapse-icon" id="modelsTabManagerCard-collapse" style="font-size: 14px; font-weight: bold; margin-left: 8px;">▼</span>
     </div>
 
-    <!-- Manager Container -->
-    <div id="modelsTabManagerContainer" style="display: none; flex-direction: column; gap: 12px;">
-      <div style="font-size:11px; color:var(--text-muted); padding: 8px 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 8px;">
-        Uncheck models to <strong>disable (block)</strong> them across all providers. Checked models are allowed. Empty selection allows all models.
-      </div>
-      
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-        <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
-          <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabSelectAll()">✓ Select All</button>
-          <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabDeselectAll()">✗ Select None</button>
-          <button class="icon-btn" id="modelsTabCheckAliveBtn" style="font-size:11px; padding: 4px 10px; background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3);" onclick="modelsTabCheckAllAlive()">🩺 Check Alive &amp; Auto-Block Dead</button>
+    <div id="modelsTabManagerCard-body">
+      <!-- Manager Container -->
+      <div id="modelsTabManagerContainer" style="display: none; flex-direction: column; gap: 12px;">
+        <div style="font-size:11px; color:var(--text-muted); padding: 8px 12px; background: rgba(59, 130, 246, 0.05); border: 1px solid rgba(59, 130, 246, 0.15); border-radius: 8px;">
+          Uncheck models to <strong>disable (block)</strong> them across all providers. Checked models are allowed. Empty selection allows all models.
         </div>
-        <div style="display:flex; align-items:center; gap:12px;">
-          <span id="modelsTabAliveProgress" style="font-size:10px; color:var(--text-muted); display:none;"></span>
-          <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
-            Selected: <strong id="modelsTabSelCount" style="color: var(--text)">0</strong> / <strong id="modelsTabTotCount" style="color: var(--text)">0</strong>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">
+            <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabSelectAll()">✓ Select All</button>
+            <button class="icon-btn" style="font-size:11px; padding: 4px 10px;" onclick="modelsTabDeselectAll()">✗ Select None</button>
+            <button class="icon-btn" id="modelsTabCheckAliveBtn" style="font-size:11px; padding: 4px 10px; background: rgba(139,92,246,0.1); border-color: rgba(139,92,246,0.3);" onclick="modelsTabCheckAllAlive()">🩺 Check Alive &amp; Auto-Block Dead</button>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span id="modelsTabAliveProgress" style="font-size:10px; color:var(--text-muted); display:none;"></span>
+            <div style="font-size: 11px; color: var(--text-muted); font-family: var(--font-mono);">
+              Selected: <strong id="modelsTabSelCount" style="color: var(--text)">0</strong> / <strong id="modelsTabTotCount" style="color: var(--text)">0</strong>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- Search & Filters for Manager List -->
-      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-        <input id="modelsTabManagerSearchInput" type="text" placeholder="Search manager models..." 
-          style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; width: 200px;" oninput="renderModelsTabManagerList()" />
-        <select id="modelsTabManagerStatusFilter" onchange="renderModelsTabManagerList()"
-          style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; cursor: pointer;">
-          <option value="all">🟢 All Statuses</option>
-          <option value="alive">✅ Alive Only</option>
-          <option value="dead">❌ Dead Only</option>
-          <option value="unchecked">❓ Not Checked</option>
-        </select>
-      </div>
+        <!-- Search & Filters for Manager List -->
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <input id="modelsTabManagerSearchInput" type="text" placeholder="Search manager models..." 
+            style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; width: 200px;" oninput="renderModelsTabManagerList()" />
+          <select id="modelsTabManagerStatusFilter" onchange="renderModelsTabManagerList()"
+            style="background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); font-size:11px; padding:4px 10px; outline:none; cursor: pointer;">
+            <option value="all">🟢 All Statuses</option>
+            <option value="alive">✅ Alive Only</option>
+            <option value="dead">❌ Dead Only</option>
+            <option value="unchecked">❓ Not Checked</option>
+          </select>
+        </div>
 
-      <div class="model-list" id="modelsTabModelList" style="max-height: 340px;">
-        <!-- Checkboxes inject here -->
-      </div>
+        <div class="model-list" id="modelsTabModelList" style="max-height: 340px;">
+          <!-- Checkboxes inject here -->
+        </div>
 
-      <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
-        <button class="save-btn" id="modelsTabSaveBtn" onclick="modelsTabSaveSelection()" style="padding: 8px 20px; font-size: 12px;">💾 Save Selection</button>
-        <span id="modelsTabSaveStatus" style="font-size: 12px; transition: opacity 0.3s;" class="save-status hidden"></span>
+        <div style="display: flex; gap: 8px; align-items: center; margin-top: 4px;">
+          <button class="save-btn" id="modelsTabSaveBtn" onclick="modelsTabSaveSelection()" style="padding: 8px 20px; font-size: 12px;">💾 Save Selection</button>
+          <span id="modelsTabSaveStatus" style="font-size: 12px; transition: opacity 0.3s;" class="save-status hidden"></span>
+        </div>
       </div>
-    </div>
-    
-    <div id="modelsTabManagerEmptyHint" style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
-      Click "Load Models from All Providers" to fetch and manage models across all configured API providers.
+      
+      <div id="modelsTabManagerEmptyHint" style="padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px;">
+        Click "Load Models from All Providers" to fetch and manage models across all configured API providers.
+      </div>
     </div>
   </div>
 
-  <div class="card">
-    <div class="section-header" style="flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px">
+  <!-- Models Status Summary Card -->
+  <div class="card" id="modelsStatusSummaryCard" style="margin-bottom: 20px;">
+    <div class="section-header" style="flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 12px; cursor: pointer; user-select: none;" onclick="toggleCardCollapse('modelsStatusSummaryCard')">
+      <div class="section-title" style="margin-bottom: 0;">📊 Model Status Overview</div>
+      <span class="collapse-icon" id="modelsStatusSummaryCard-collapse" style="font-size: 14px; font-weight: bold; margin-left: auto;">▼</span>
+    </div>
+    <div id="modelsStatusSummaryCard-body">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+        <!-- Enabled Models Column -->
+        <div style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.15); border-radius: 8px; padding: 14px;">
+          <h4 style="margin: 0 0 10px; color: var(--green); display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;">
+            🟢 Enabled Models (<span id="summaryEnabledCount">0</span>)
+          </h4>
+          <div id="summaryEnabledList" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 200px; overflow-y: auto; padding: 4px;">
+            <span style="font-size: 11px; color: var(--text-dim);">No enabled models.</span>
+          </div>
+        </div>
+        
+        <!-- Disabled Models Column -->
+        <div style="background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15); border-radius: 8px; padding: 14px;">
+          <h4 style="margin: 0 0 10px; color: var(--red); display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;">
+            ⛔ Disabled Models (<span id="summaryDisabledCount">0</span>)
+          </h4>
+          <div id="summaryDisabledList" style="display: flex; flex-wrap: wrap; gap: 6px; max-height: 200px; overflow-y: auto; padding: 4px;">
+            <span style="font-size: 11px; color: var(--text-dim);">No disabled models.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="modelsDirectoryCard">
+    <div class="section-header" style="flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px; cursor: pointer; user-select: none;" onclick="toggleCardCollapse('modelsDirectoryCard')">
       <div class="section-title" style="margin-bottom:0">Models Directory &amp; Latency Analytics</div>
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-left:auto" onclick="event.stopPropagation()">
         <!-- Date range -->
         <div style="display:flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border2);border-radius:6px;padding:3px 10px">
           <span style="font-size:11px;color:var(--text-muted)">From</span>
@@ -1085,32 +1119,36 @@
         <button class="models-btn" onclick="checkAllModelsAlive()">Check All Alive</button>
         <button class="icon-btn" onclick="flashRefresh(this);modelTabFetchLogs();fetchStatus()" title="Refresh model directory">🔄 Refresh</button>
       </div>
+      <span class="collapse-icon" id="modelsDirectoryCard-collapse" style="font-size: 14px; font-weight: bold; margin-left: 8px;">▼</span>
     </div>
-    <!-- Date filter active indicator -->
-    <div id="modelTabDateBanner" style="display:none;font-size:11px;color:var(--accent);padding:4px 0 10px;margin-top:-4px">
-      📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
-    </div>
-    <div class="log-wrap" style="max-height:500px">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:46px;text-align:center">Enable</th>
-            <th onclick="sortModelTab('name')" style="cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></th>
-            <th onclick="sortModelTab('requestCount')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></th>
-            <th onclick="sortModelTab('totalTokens')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Total Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></th>
-            <th onclick="sortModelTab('avgLatency')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></th>
-            <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
-            <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
-            <th style="text-align:center">Alive</th>
-            <th style="text-align:center">Analytics</th>
-          </tr>
-        </thead>
-        <tbody id="modelTabBody">
-          <tr><td colspan="9" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
-        </tbody>
-      </table>
+    <div id="modelsDirectoryCard-body">
+      <!-- Date filter active indicator -->
+      <div id="modelTabDateBanner" style="display:none;font-size:11px;color:var(--accent);padding:4px 0 10px;margin-top:-4px">
+        📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
+      </div>
+      <div class="log-wrap" style="max-height:500px">
+        <table>
+          <thead>
+            <tr>
+              <th style="width:46px;text-align:center">Enable</th>
+              <th onclick="sortModelTab('name')" style="cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></th>
+              <th onclick="sortModelTab('requestCount')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></th>
+              <th onclick="sortModelTab('totalTokens')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Total Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></th>
+              <th onclick="sortModelTab('avgLatency')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></th>
+              <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
+              <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
+              <th style="text-align:center">Alive</th>
+              <th style="text-align:center">Analytics</th>
+            </tr>
+          </thead>
+          <tbody id="modelTabBody">
+            <tr><td colspan="9" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
+</div>
 </div>
 
 <!-- ══ SETTINGS ══ -->
@@ -2202,6 +2240,7 @@ function renderModelsTab() {
       <td style="text-align:center">${analyticsBtn}</td>
     </tr>`;
   }).join('');
+  updateModelStatusSummary();
 }
 
 function sortModelTab(col) {
@@ -3475,6 +3514,7 @@ function renderModelsTabManagerList() {
   
   document.getElementById('modelsTabSelCount').textContent = _modelsTabCached.length - _disabledModels.length;
   document.getElementById('modelsTabTotCount').textContent = _modelsTabCached.length;
+  updateModelStatusSummary();
 }
 
 function toggleModelsTabCheckbox(cb) {
@@ -4257,6 +4297,7 @@ async function loadConfig(){
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
     _disabledModels = cfg.disabledModels || [];
+    updateModelStatusSummary();
     // If provider list changed, clear stale model cache to force a fresh load
     if (_providers.length !== prevProviderCount) {
       _modelsTabCached = [];
@@ -5459,24 +5500,42 @@ function renderHealthTab(data) {
     container.appendChild(card);
 
     const modelList = card.querySelector('.health-model-list');
+    
+    // Parse exclusions
+    const excludesInput = document.getElementById('healthCheckExclude');
+    const currentExcludes = excludesInput ? excludesInput.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [];
+
     for (const m of (prov.models || [])) {
-      const st      = m.status || 'unknown';
-      const latMs   = m.latencyMs;
+      const mLower = m.model.toLowerCase();
+      const isExcluded = currentExcludes.some(pattern => mLower.includes(pattern));
+      
+      const st      = isExcluded ? 'unknown' : (m.status || 'unknown');
+      const latMs   = isExcluded ? null : m.latencyMs;
       const barPct  = latMs != null ? Math.min(100, Math.round((latMs / MAX_LATENCY_MS) * 100)) : 0;
       const latLabel = latMs != null ? (latMs >= 1000 ? `${(latMs/1000).toFixed(1)}s` : `${latMs}ms`) : '—';
-      const ageStr  = m.lastChecked ? _fmtHealthAge(m.lastChecked) : 'not checked';
-      const errTip  = m.error ? `<div class="health-error-tip" title="${escHtml(m.error)}">⚠ ${escHtml(m.error.slice(0,80))}${m.error.length>80?'…':''}</div>` : '';
+      const ageStr  = isExcluded ? 'excluded' : (m.lastChecked ? _fmtHealthAge(m.lastChecked) : 'not checked');
+      const errTip  = (!isExcluded && m.error) ? `<div class="health-error-tip" title="${escHtml(m.error)}">⚠ ${escHtml(m.error.slice(0,80))}${m.error.length>80?'…':''}</div>` : '';
+
+      const excludeCheckbox = `<label style="display:inline-flex;align-items:center;gap:6px;font-size:11px;color:var(--text-muted);cursor:pointer;user-select:none;margin:0" onclick="event.stopPropagation()">
+        <input type="checkbox" ${isExcluded ? 'checked' : ''} onchange="toggleModelExclusion('${escHtml(m.model)}', this.checked)" style="width:13px;height:13px;accent-color:var(--accent);cursor:pointer;margin:0" />
+        <span>Exclude</span>
+      </label>`;
 
       const row = document.createElement('div');
       row.className = 'health-model-row';
+      if (isExcluded) row.style.opacity = '0.6';
+      
       row.innerHTML = `
         <div class="health-status-dot ${st}"></div>
-        <div style="min-width:0">
+        <div style="display:flex;align-items:center;">
+          ${excludeCheckbox}
+        </div>
+        <div style="min-width:0;">
           <div class="health-model-name" title="${escHtml(m.model)}">${escHtml(m.model)}</div>
           ${errTip}
         </div>
         <div>
-          <span class="health-status-badge ${st}">${st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown'}</span>
+          <span class="health-status-badge ${st}">${isExcluded ? '🚫 Excluded' : (st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown')}</span>
         </div>
         <div class="health-latency-wrap">
           <div class="health-latency-bar-bg"><div class="health-latency-bar-fill ${st}" style="width:${barPct}%"></div></div>
@@ -5613,6 +5672,89 @@ async function fetchUpdateTargets() {
   } catch (e) {
     console.warn('[Update Targets] failed to fetch:', e.message);
   }
+}
+
+// ── Models Tab UI Helpers (Collapsible Cards & Status Overview) ──
+function toggleCardCollapse(cardId) {
+  const body = document.getElementById(cardId + '-body');
+  const icon = document.getElementById(cardId + '-collapse');
+  if (!body || !icon) return;
+  
+  if (body.style.display === 'none') {
+    body.style.display = '';
+    icon.textContent = '▼';
+  } else {
+    body.style.display = 'none';
+    icon.textContent = '►';
+  }
+}
+
+function getAllKnownModels() {
+  const modelsSet = new Set();
+  const keys = _poolKeys || [];
+  keys.forEach(k => {
+    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
+    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+  });
+  _activeLogs.forEach(log => {
+    if (log.model) modelsSet.add(log.model);
+  });
+  _disabledModels.forEach(m => modelsSet.add(m));
+  return Array.from(modelsSet).sort();
+}
+
+function updateModelStatusSummary() {
+  const enabledContainer = document.getElementById('summaryEnabledList');
+  const disabledContainer = document.getElementById('summaryDisabledList');
+  if (!enabledContainer || !disabledContainer) return;
+
+  const allModels = _modelsTabCached.length > 0 ? _modelsTabCached : getAllKnownModels();
+  const enabledModels = allModels.filter(m => !_disabledModels.includes(m));
+  const disabledModels = _disabledModels.filter(m => allModels.includes(m));
+
+  document.getElementById('summaryEnabledCount').textContent = enabledModels.length;
+  document.getElementById('summaryDisabledCount').textContent = disabledModels.length;
+
+  if (enabledModels.length === 0) {
+    enabledContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-dim); padding: 4px 0;">No enabled models.</span>';
+  } else {
+    enabledContainer.innerHTML = enabledModels.map(m => {
+      return `<span style="display: inline-flex; align-items: center; padding: 3px 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: 6px; color: var(--green); font-size: 11px; font-family: var(--font-mono); font-weight: 500;">${escHtml(m)}</span>`;
+    }).join('');
+  }
+
+  if (disabledModels.length === 0) {
+    disabledContainer.innerHTML = '<span style="font-size: 11px; color: var(--text-dim); padding: 4px 0;">No disabled models.</span>';
+  } else {
+    disabledContainer.innerHTML = disabledModels.map(m => {
+      return `<span style="display: inline-flex; align-items: center; padding: 3px 8px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 6px; color: var(--red); font-size: 11px; font-family: var(--font-mono); font-weight: 500;">${escHtml(m)}</span>`;
+    }).join('');
+  }
+}
+
+async function toggleModelExclusion(modelName, exclude) {
+  const inputEl = document.getElementById('healthCheckExclude');
+  if (!inputEl) return;
+  
+  let excludes = inputEl.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  const mLower = modelName.toLowerCase();
+  
+  if (exclude) {
+    // Add to exclusions if not already present
+    if (!excludes.includes(mLower)) {
+      excludes.push(mLower);
+    }
+  } else {
+    // Remove from exclusions
+    excludes = excludes.filter(s => s !== mLower);
+  }
+  
+  inputEl.value = excludes.join(', ');
+  
+  // Save silently
+  await persistConfigForModelActions();
+  // Fetch fresh health data to reflect the changes (since exclusions change check statuses)
+  await fetchHealthData();
 }
 </script>
 </body>
