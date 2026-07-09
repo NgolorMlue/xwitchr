@@ -2,9 +2,14 @@ name: Docker Image CI
 
 on:
   push:
-    branches: ["master"]
+    branches:
+      - master
+    tags-ignore:
+      - '*'
+      - '**'
   pull_request:
-    branches: ["master"]
+    branches:
+      - master
   workflow_dispatch:
     inputs:
       port:
