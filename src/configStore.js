@@ -66,8 +66,6 @@ function sanitizeModelEntry(m) {
       rpm:  isFinite(rpm) && rpm > 0 ? rpm : null,
       tpm:  isFinite(tpm) && tpm > 0 ? tpm : null,
     };
-    // Preserve health-checker-managed enabled flag (false = dead model, suppressed from routing)
-    if (m.enabled === false) entry.enabled = false;
     return entry;
   }
   return null;
