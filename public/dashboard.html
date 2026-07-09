@@ -1186,6 +1186,17 @@
         </div>
       </div>
 
+      <!-- Health Check Settings -->
+      <div class="card">
+        <div class="section-header"><div class="section-title">🩺 Health Check Settings</div></div>
+        <div class="form-hint" style="margin-bottom:12px">Configure the automatic model health checker.</div>
+        <div class="form-group">
+          <label class="form-label" for="healthCheckExclude">Exclude Models (comma-separated)</label>
+          <input class="form-input" id="healthCheckExclude" type="text" placeholder="e.g. tts-1, whisper-1, flux, dall-e" />
+          <div class="form-hint">Models matching these names or prefixes (case-insensitive) won't be checked or auto-disabled. They will stay enabled.</div>
+        </div>
+      </div>
+
     </div><!-- end left col -->
 
     <!-- RIGHT: Providers -->
@@ -4275,6 +4286,8 @@ async function loadConfig(){
     if (heEl) heEl.checked = !!cfg.httpsEnabled;
     if (cpEl) cpEl.value = cfg.httpsCertPath || '';
     if (kpEl) kpEl.value = cfg.httpsKeyPath  || '';
+    const hcExclude = document.getElementById('healthCheckExclude');
+    if (hcExclude) hcExclude.value = cfg.healthCheckExclude || '';
     // Show restart badge if saved port differs from what server is currently listening on
     const restartBadge = document.getElementById('serverRestartBadge');
     if (restartBadge) restartBadge.style.display = (cfg.activePort && cfg.port && cfg.activePort !== cfg.port) ? 'block' : 'none';
@@ -5054,6 +5067,7 @@ function buildConfigPayload() {
     httpsEnabled:  document.getElementById('httpsEnabled')?.checked || false,
     httpsCertPath: document.getElementById('httpsCertPath')?.value?.trim() || '',
     httpsKeyPath:  document.getElementById('httpsKeyPath')?.value?.trim()  || '',
+    healthCheckExclude: document.getElementById('healthCheckExclude')?.value || '',
   };
 }
 
