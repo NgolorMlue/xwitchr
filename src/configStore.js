@@ -29,6 +29,7 @@ const DEFAULTS = {
   httpsEnabled:      false,
   httpsCertPath:     '',
   httpsKeyPath:      '',
+  healthCheckExclude: '',
 };
 
 function generateToken() {

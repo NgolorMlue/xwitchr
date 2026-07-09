@@ -310,6 +310,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
+  'healthCheckExclude',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────

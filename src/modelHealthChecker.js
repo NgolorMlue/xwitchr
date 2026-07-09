@@ -202,6 +202,17 @@ class ModelHealthChecker {
 
     const cfg     = this.getCfg();
 
+    // Parse the exclusions (comma separated list of partial matches)
+    const excludes = (cfg.healthCheckExclude || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isExcluded = (modelName) => {
+      const mLower = modelName.toLowerCase();
+      return excludes.some(pattern => mLower.includes(pattern));
+    };
+
     // ── Deduplicate by URL: same endpoint = one check with the first enabled key.
     // Models from all providers sharing the same URL are merged (union).
     // This keeps the checker stealth — the endpoint only sees one probe per model.
@@ -217,8 +228,12 @@ class ModelHealthChecker {
         // First key we see for this URL becomes the representative — used for auth
         urlMap[url] = { provider, models: new Set() };
       }
-      // Merge models across all providers at the same URL
-      for (const m of models) urlMap[url].models.add(m);
+      // Merge models across all providers at the same URL (filtering out excluded models)
+      for (const m of models) {
+        if (!isExcluded(m)) {
+          urlMap[url].models.add(m);
+        }
+      }
     }
 
     const tasks = [];
@@ -264,9 +279,8 @@ class ModelHealthChecker {
    *   dead  → enabled: false  (suppressed from routing)
    *   alive/slow → enabled removed (routing allowed)
    *
-   * Only touches providers whose URL we actually checked (deduped by URL).
-   * If a provider has an empty allowedModels list, we populate it from cachedModels
-   * first so we can target individual models.
+   * Excluded models are skipped from disabling. If they were previously disabled,
+   * we re-enable them (remove enabled:false) to ensure they are routable.
    */
   _applyHealthToConfig() {
     if (!this.onConfigUpdated) return;
@@ -274,6 +288,17 @@ class ModelHealthChecker {
     const cfg     = this.getCfg();
     let   changed = false;
     const urlSeen = new Set();
+
+    // Parse the exclusions
+    const excludes = (cfg.healthCheckExclude || '')
+      .split(',')
+      .map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+
+    const isExcluded = (modelName) => {
+      const mLower = modelName.toLowerCase();
+      return excludes.some(pattern => mLower.includes(pattern));
+    };
 
     for (const provider of (cfg.providers || [])) {
       if (provider.enabled === false) continue;
@@ -303,6 +328,18 @@ class ModelHealthChecker {
         const modelName = typeof entry === 'object' ? entry.name : entry;
         const key       = this._key(url, modelName);
         const result    = this.results[key];
+
+        // If the model is explicitly excluded, ensure it is re-enabled if previously disabled, then ignore.
+        if (isExcluded(modelName)) {
+          if (typeof entry === 'object' && entry.enabled === false) {
+            const { enabled: _removed, ...rest } = entry;
+            provider.allowedModels[i] = rest;
+            changed = true;
+            console.log(`[HealthChecker] ✅ Re-enabled excluded model: ${modelName} (${url.replace(/^https?:\/\//, '').split('/')[0]})`);
+          }
+          continue;
+        }
+
         if (!result || result.status === 'unknown') continue;
 
         const shouldDisable = result.status === 'dead';
