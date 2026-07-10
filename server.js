@@ -354,7 +354,8 @@ app.post('/config/regenerate-token', (req, res) => {
 });
 
 // ── GET /config/check-update ──────────────────────────────────────────────
-// Checks if there are any new commits on origin/<current_branch> compared to the local HEAD.
+// Checks commits behind for origin/<branch> vs local HEAD.
+// Optional ?branch=<name> param lets the UI check a specific branch before switching.
 // exec is imported at the top of the file
 app.get('/config/check-update', (req, res) => {
   const gitDir = path.join(__dirname, '.git');
@@ -362,27 +363,38 @@ app.get('/config/check-update', (req, res) => {
     return res.json({ ok: false, available: false, error: 'Not running inside a Git repository.' });
   }
 
-  exec('git fetch', (fetchErr) => {
+  // If a target branch is provided via query, validate it first
+  const targetBranch = (req.query.branch || '').trim();
+  if (targetBranch && !SAFE_GIT_TARGET.test(targetBranch)) {
+    return res.json({ ok: false, available: false, error: 'Invalid branch name.' });
+  }
+
+  exec('git fetch --all', (fetchErr) => {
     if (fetchErr) {
       console.warn('[Update Check] git fetch failed:', fetchErr.message);
       return res.json({ ok: false, available: false, error: 'Failed to fetch updates from GitHub: ' + fetchErr.message });
     }
 
     exec('git rev-parse --abbrev-ref HEAD', (branchErr, currentBranchStdout) => {
-      const branch = (branchErr || !currentBranchStdout) ? 'master' : currentBranchStdout.trim();
-      const originBranch = `origin/${branch}`;
+      const currentBranch = (branchErr || !currentBranchStdout) ? 'master' : currentBranchStdout.trim();
+      // Use the requested branch for comparison, or fall back to current branch
+      const compareBranch = targetBranch || currentBranch;
+      const originRef = `origin/${compareBranch}`;
 
-      exec(`git rev-list --count HEAD..${originBranch}`, (diffErr, stdout) => {
+      exec(`git rev-list --count HEAD..${originRef}`, (diffErr, stdout) => {
         if (diffErr) {
-          console.warn(`[Update Check] git rev-list failed for ${originBranch}:`, diffErr.message);
-          return res.json({ ok: false, available: false, error: 'Failed to check commit difference: ' + diffErr.message });
+          console.warn(`[Update Check] git rev-list failed for ${originRef}:`, diffErr.message);
+          return res.json({ ok: false, available: false, error: `Branch "${compareBranch}" not found on remote or failed to compare: ` + diffErr.message });
         }
 
         const count = parseInt(stdout.trim(), 10) || 0;
         res.json({
-          ok: true,
-          available: count > 0,
-          commitsBehind: count
+          ok:            true,
+          available:     count > 0,
+          commitsBehind: count,
+          branch:        compareBranch,
+          currentBranch,
+          isSameBranch:  compareBranch === currentBranch,
         });
       });
     });

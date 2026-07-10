@@ -1511,12 +1511,17 @@
       <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;justify-content:center">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">System Updates</div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label class="form-label" for="updateTargetSelect" style="margin:0;font-size:11px">Update to Branch / Tag</label>
-          <select class="form-select" id="updateTargetSelect" style="font-size:12.5px;height:32px;padding:4px 8px;cursor:pointer;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;outline:none">
-            <option value="">-- Loading Branch / Tag --</option>
-          </select>
+          <label class="form-label" for="updateTargetSelect" style="margin:0;font-size:11px">Branch / Tag</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="form-select" id="updateTargetSelect" onchange="resetUpdateCheck()" style="flex:1;font-size:12.5px;height:32px;padding:4px 8px;cursor:pointer;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;outline:none">
+              <option value="">-- Loading Branch / Tag --</option>
+            </select>
+            <button class="icon-btn" id="checkUpdateBtn" onclick="checkSelectedBranch()" title="Check how many commits behind this branch is" style="height:32px;padding:0 12px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">🔍 Check</button>
+          </div>
         </div>
-        <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%">🔄 Update App from GitHub</button>
+        <!-- Check result banner — hidden until a check is run -->
+        <div id="branchCheckResult" style="display:none;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid transparent"></div>
+        <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%;display:none">🔄 Update App from GitHub</button>
         <div id="updateStatusText" style="font-size:11px;color:var(--text-muted);min-height:14px;line-height:1.5;text-align:center"></div>
         <pre id="updateLogOutput" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
       </div>
@@ -5193,124 +5198,141 @@ function doLogout() {
   switchTab('monitor');
 }
 
-async function checkUpdates() {
-  const statusEl = document.getElementById('updateStatusText');
-  const btn = document.getElementById('updateBtn');
-  if (!statusEl || !btn) return;
+// Track the last check result so triggerAppUpdate can use it without re-fetching
+let _lastCheckData = null;
 
-  statusEl.textContent = 'Checking for updates...';
-  statusEl.style.color = 'var(--text-muted)';
+function resetUpdateCheck() {
+  _lastCheckData = null;
+  const resultEl  = document.getElementById('branchCheckResult');
+  const updateBtn = document.getElementById('updateBtn');
+  const statusEl  = document.getElementById('updateStatusText');
+  if (resultEl)  { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+  if (updateBtn) { updateBtn.style.display = 'none'; }
+  if (statusEl)  { statusEl.textContent = ''; }
+}
+
+async function checkSelectedBranch() {
+  const select    = document.getElementById('updateTargetSelect');
+  const checkBtn  = document.getElementById('checkUpdateBtn');
+  const resultEl  = document.getElementById('branchCheckResult');
+  const updateBtn = document.getElementById('updateBtn');
+  const statusEl  = document.getElementById('updateStatusText');
+  if (!checkBtn || !resultEl) return;
+
+  const branch = select ? select.value : '';
+
+  checkBtn.disabled    = true;
+  checkBtn.textContent = '⏳ Checking…';
+  if (resultEl)  { resultEl.style.display = 'none'; }
+  if (updateBtn) { updateBtn.style.display = 'none'; }
+  if (statusEl)  { statusEl.textContent = ''; }
 
   try {
-    const res = await authFetch('/config/check-update');
+    const url = branch ? `/config/check-update?branch=${encodeURIComponent(branch)}` : '/config/check-update';
+    const res  = await authFetch(url);
     if (res.status === 401) return;
     const data = await res.json();
-    
-    if (data.ok) {
-      if (data.available) {
-        statusEl.textContent = `Update available! (${data.commitsBehind} commit${data.commitsBehind !== 1 ? 's' : ''} behind)`;
-        statusEl.style.color = 'var(--yellow)';
-        btn.textContent = '🔄 Update App from GitHub';
-        btn.classList.add('accent');
-        _updateAvailable = true;
-      } else {
-        statusEl.textContent = 'App is up to date.';
-        statusEl.style.color = 'var(--green)';
-        btn.textContent = '🔄 Reinstall/Force Update';
-        btn.classList.remove('accent');
-        _updateAvailable = false;
+    _lastCheckData = data;
+
+    if (!data.ok) {
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)';
+      resultEl.textContent = '❌ ' + (data.error || 'Check failed.');
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = '⚠️ Force Install Anyway';
+        updateBtn.className     = 'icon-btn';
+      }
+    } else if (data.available) {
+      const label = branch || data.branch || 'branch';
+      const isSwitching = !data.isSameBranch;
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(234,179,8,.3);background:rgba(234,179,8,.08);color:var(--yellow)';
+      resultEl.innerHTML = isSwitching
+        ? `⚡ <strong>${data.commitsBehind} new commit${data.commitsBehind !== 1 ? 's' : ''}</strong> on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code> — switching from <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(data.currentBranch)}</code>`
+        : `⚡ <strong>${data.commitsBehind} new commit${data.commitsBehind !== 1 ? 's' : ''}</strong> available on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code>`;
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = isSwitching ? `🔄 Switch to ${label} & Install` : '🔄 Pull & Install Update';
+        updateBtn.className     = 'icon-btn accent';
       }
     } else {
-      statusEl.textContent = data.error || 'Update check skipped (non-Git).';
-      statusEl.style.color = 'var(--text-muted)';
-      _updateAvailable = false;
+      const label = branch || data.branch || 'branch';
+      const isSwitching = !data.isSameBranch;
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:var(--green)';
+      resultEl.innerHTML = isSwitching
+        ? `✅ No new commits — <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code> is at the same point as your current HEAD`
+        : `✅ Already up to date on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code>`;
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = isSwitching ? `🔁 Force Switch to ${label}` : '🔁 Force Reinstall';
+        updateBtn.className     = 'icon-btn';
+      }
     }
   } catch (err) {
-    statusEl.textContent = 'Failed to check updates: ' + err.message;
-    statusEl.style.color = 'var(--red)';
-    _updateAvailable = false;
+    resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)';
+    resultEl.textContent = '❌ Network error: ' + err.message;
+    _lastCheckData = null;
+  } finally {
+    checkBtn.disabled    = false;
+    checkBtn.textContent = '🔍 Check';
   }
 }
 
-async function triggerAppUpdate() {
-  const btn = document.getElementById('updateBtn');
+// Legacy wrapper kept for the profile tab auto-check on load
+async function checkUpdates() {
+  // No-op: checking is now explicit via the Check button.
+  // Just clear the status text so it doesn't show stale info.
   const statusEl = document.getElementById('updateStatusText');
-  const logEl = document.getElementById('updateLogOutput');
-  
+  if (statusEl) statusEl.textContent = '';
+}
+
+async function triggerAppUpdate() {
+  const btn      = document.getElementById('updateBtn');
+  const statusEl = document.getElementById('updateStatusText');
+  const logEl    = document.getElementById('updateLogOutput');
   if (!btn || !statusEl || !logEl) return;
 
-  btn.disabled = true;
-  const origText = btn.textContent;
-  statusEl.textContent = 'Checking update availability...';
-  statusEl.style.color = 'var(--text-muted)';
-  logEl.style.display = 'none';
-  logEl.textContent = '';
-
   const targetSelect = document.getElementById('updateTargetSelect');
-  const target = targetSelect ? targetSelect.value : '';
+  const target       = targetSelect ? targetSelect.value : '';
 
-  if (target) {
-    if (!confirm(`Switch app branch/version to "${target}"? This will checkout the target and run npm install.`)) {
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-  } else {
-    try {
-      const checkRes = await authFetch('/config/check-update');
-      const checkData = await checkRes.json();
-
-      if (checkData.ok) {
-        _updateAvailable = checkData.available;
-        if (!_updateAvailable) {
-          if (!confirm('No new updates are available on the current branch. Do you want to force reinstall the current version anyway?')) {
-            btn.disabled = false;
-            statusEl.textContent = 'App is up to date.';
-            statusEl.style.color = 'var(--green)';
-            return;
-          }
-        } else {
-          if (!confirm(`Update available! (${checkData.commitsBehind} commit(s) behind). Do you want to pull and install it now?`)) {
-            btn.disabled = false;
-            statusEl.textContent = `Update available! (${checkData.commitsBehind} commit(s) behind)`;
-            statusEl.style.color = 'var(--yellow)';
-            return;
-          }
-        }
-      } else {
-        if (!confirm('Could not verify updates: ' + (checkData.error || 'Unknown error') + '\n\nDo you want to attempt the update anyway?')) {
-          btn.disabled = false;
-          statusEl.textContent = checkData.error || 'Update check failed.';
-          return;
-        }
-      }
-    } catch (err) {
-      if (!confirm('Failed to check updates: ' + err.message + '\n\nDo you want to attempt the update anyway?')) {
-        btn.disabled = false;
-        statusEl.textContent = 'Failed to check updates.';
-        return;
-      }
-    }
+  // If they haven't run a check yet, require it first
+  if (!_lastCheckData) {
+    statusEl.textContent = '⚠️ Please click Check first to preview the changes.';
+    statusEl.style.color = 'var(--yellow)';
+    return;
   }
 
-  btn.textContent = '⚙️ Updating...';
-  statusEl.textContent = target ? `Switching app to "${target}" and running npm install...` : 'Running updates on the server (git pull & npm install)...';
+  // Confirm before proceeding
+  const label = target || _lastCheckData?.branch || 'current branch';
+  const isSwitching = _lastCheckData && !_lastCheckData.isSameBranch;
+  const msg = isSwitching
+    ? `Switch to branch "${label}" and run npm install? The server will restart.`
+    : (_lastCheckData?.available
+        ? `Pull ${_lastCheckData.commitsBehind} new commit(s) on "${label}" and run npm install? The server will restart.`
+        : `Force reinstall on "${label}" (already up to date). The server will restart.`);
+
+  if (!confirm(msg)) return;
+
+  btn.disabled    = true;
+  const origText  = btn.textContent;
+  statusEl.textContent = target ? `Switching to "${target}" and running npm install…` : 'Running git pull & npm install…';
   statusEl.style.color = 'var(--text-muted)';
+  logEl.style.display  = 'none';
+  logEl.textContent    = '';
+  btn.textContent      = '⚙️ Updating…';
 
   try {
-    const res = await authFetch('/config/update', {
-      method: 'POST',
+    const res  = await authFetch('/config/update', {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: target || undefined })
+      body:    JSON.stringify({ target: target || undefined }),
     });
-    
     const data = await res.json();
-    
+
     if (res.status === 400) {
       statusEl.textContent = '❌ Update blocked';
       statusEl.style.color = 'var(--red)';
       alert('Update blocked:\n' + (data.error || 'Check server configuration.'));
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = origText;
       return;
     }
@@ -5318,30 +5340,31 @@ async function triggerAppUpdate() {
     if (!res.ok || !data.ok) {
       statusEl.textContent = '❌ Update failed';
       statusEl.style.color = 'var(--red)';
-      logEl.style.display = 'block';
-      logEl.textContent = (data.error || 'Unknown error') + '\n\nLogs:\n' + (data.log || '');
-      btn.disabled = false;
+      logEl.style.display  = 'block';
+      logEl.textContent    = (data.error || 'Unknown error') + '\n\nLogs:\n' + (data.log || '');
+      btn.disabled    = false;
       btn.textContent = origText;
       return;
     }
 
-    statusEl.textContent = '✅ Update successful! Restarting server...';
+    statusEl.textContent = '✅ Update successful! Restarting server…';
     statusEl.style.color = 'var(--green)';
-    logEl.style.display = 'block';
-    logEl.textContent = data.log || 'No logs returned.';
-    btn.textContent = '🔄 Restarting...';
-
+    logEl.style.display  = 'block';
+    logEl.textContent    = data.log || 'No logs returned.';
+    btn.textContent      = '🔄 Restarting…';
+    resetUpdateCheck();
     pollServerRestart();
 
   } catch (err) {
     statusEl.textContent = '❌ Connection error';
     statusEl.style.color = 'var(--red)';
-    logEl.style.display = 'block';
-    logEl.textContent = err.message;
-    btn.disabled = false;
+    logEl.style.display  = 'block';
+    logEl.textContent    = err.message;
+    btn.disabled    = false;
     btn.textContent = origText;
   }
 }
+
 
 function pollServerRestart() {
   const statusEl = document.getElementById('updateStatusText');
