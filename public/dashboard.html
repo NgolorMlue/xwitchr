@@ -3884,6 +3884,10 @@ async function modelsTabSaveSelection() {
   statusEl.className = 'save-status';
   statusEl.style.color = 'var(--accent)';
   
+  let allOk = true;
+  const errors = [];
+  const allowedModelsList = _modelsTabCached.filter(m => !_disabledModels.includes(m));
+  
   for (let i = 0; i < _providers.length; i++) {
     const p = _providers[i];
     if (!p.url || !p.key) continue;
@@ -3895,7 +3899,7 @@ async function modelsTabSaveSelection() {
     });
     
     // Allowed models = intersection of global allowed and provider's models, with per-model limits
-    const providerAllowed = _modelsTabAllowed
+    const providerAllowed = allowedModelsList
       .filter(m => providerModels.includes(m))
       .map(m => {
         const lim = _modelsTabModelLimits[m] || {};
