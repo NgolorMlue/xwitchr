@@ -151,7 +151,7 @@ function load() {
         if (!cm || typeof cm !== 'object' || !cm.name) return null;
         return {
           name: String(cm.name).trim(),
-          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 10) : []
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 20) : []
         };
       }).filter(Boolean)
     : [];
@@ -213,7 +213,7 @@ function save(config) {
         if (!cm || typeof cm !== 'object' || !cm.name) return null;
         return {
           name: String(cm.name).trim(),
-          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 10) : []
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 20) : []
         };
       }).filter(Boolean)
     : (existing.customModels || []);

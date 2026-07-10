@@ -1664,7 +1664,7 @@
           
           <div class="form-group">
             <label class="form-label">Backing Models (Fallback Order)</label>
-            <div class="form-hint" style="margin-bottom:8px">Define fallback order (1 = primary, 10 = final fallback). Empty fields are ignored.</div>
+            <div class="form-hint" style="margin-bottom:8px">Define fallback order (1 = primary, 20 = final fallback). Empty fields are ignored.</div>
             
             <div id="fallbackListContainer" style="display:flex; flex-direction:column; gap:8px;">
               <!-- Dynamic list of fallback rows -->
@@ -6375,8 +6375,8 @@ function closeEditModel() {
 function addFallbackRow(val = '') {
   const container = document.getElementById('fallbackListContainer');
   const count = container.children.length;
-  if (count >= 10) {
-    alert('Maximum of 10 fallback models allowed.');
+  if (count >= 20) {
+    alert('Maximum of 20 fallback models allowed.');
     return;
   }
   
