@@ -6376,12 +6376,23 @@ function addFallbackRow(val = '') {
     return;
   }
   
+  const known = getAllKnownModels();
+  let optionsHtml = `<option value="">-- Select Backing Model --</option>`;
+  const allOptions = [...new Set(known.concat(val ? [val] : []))].sort();
+  
+  optionsHtml += allOptions.map(m => {
+    const selected = m === val ? 'selected' : '';
+    return `<option value="${escHtml(m)}" ${selected}>${escHtml(m)}</option>`;
+  }).join('');
+  
   const row = document.createElement('div');
   row.style.cssText = 'display:flex; align-items:center; gap:8px;';
   row.className = 'fallback-row';
   row.innerHTML = `
     <span style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); width:30px; text-align:right;">#${count+1}</span>
-    <input class="form-input fallback-input" list="knownModelsDatalist" type="text" placeholder="Type or select model..." value="${escHtml(val)}" style="flex:1; font-family:var(--font-mono); font-size:12.5px; padding:6px 10px;" />
+    <select class="form-select fallback-input" style="flex:1; font-family:var(--font-mono); font-size:12.5px; padding:6px 10px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); outline:none; height:36px; cursor:pointer;">
+      ${optionsHtml}
+    </select>
     <div style="display:flex; gap:2px;">
       <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, -1)" title="Move Up">↑</button>
       <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, 1)" title="Move Down">↓</button>
