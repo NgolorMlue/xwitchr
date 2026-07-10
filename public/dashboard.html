@@ -1126,25 +1126,19 @@
       <div id="modelTabDateBanner" style="display:none;font-size:11px;color:var(--accent);padding:4px 0 10px;margin-top:-4px">
         📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
       </div>
-      <div class="log-wrap" style="max-height:500px">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:46px;text-align:center">Enable</th>
-              <th onclick="sortModelTab('name')" style="cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></th>
-              <th onclick="sortModelTab('requestCount')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('totalTokens')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Total Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('avgLatency')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
-              <th style="text-align:center">Alive</th>
-              <th style="text-align:center">Analytics</th>
-            </tr>
-          </thead>
-          <tbody id="modelTabBody">
-            <tr><td colspan="9" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
-          </tbody>
-        </table>
+      <!-- Header row -->
+      <div style="display:grid;grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px;align-items:center;gap:12px;padding:6px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:0">
+        <div style="width:8px"></div>
+        <div onclick="sortModelTab('name')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></div>
+        <div onclick="sortModelTab('requestCount')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('totalTokens')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('avgLatency')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('lastStatus')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('supporting')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">View</div>
+      </div>
+      <div id="modelTabBody" style="max-height:460px;overflow-y:auto;display:flex;flex-direction:column">
+        <div class="empty-row" style="padding:24px;text-align:center">No models available. Load some in settings or send request traffic.</div>
       </div>
     </div>
   </div>
@@ -1511,12 +1505,17 @@
       <div style="padding:20px 24px;display:flex;flex-direction:column;gap:12px;justify-content:center">
         <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em">System Updates</div>
         <div style="display:flex;flex-direction:column;gap:4px">
-          <label class="form-label" for="updateTargetSelect" style="margin:0;font-size:11px">Update to Branch / Tag</label>
-          <select class="form-select" id="updateTargetSelect" style="font-size:12.5px;height:32px;padding:4px 8px;cursor:pointer;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;outline:none">
-            <option value="">-- Loading Branch / Tag --</option>
-          </select>
+          <label class="form-label" for="updateTargetSelect" style="margin:0;font-size:11px">Branch / Tag</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <select class="form-select" id="updateTargetSelect" onchange="resetUpdateCheck()" style="flex:1;font-size:12.5px;height:32px;padding:4px 8px;cursor:pointer;background:var(--surface2);border:1px solid var(--border2);color:var(--text);border-radius:6px;outline:none">
+              <option value="">-- Loading Branch / Tag --</option>
+            </select>
+            <button class="icon-btn" id="checkUpdateBtn" onclick="checkSelectedBranch()" title="Check how many commits behind this branch is" style="height:32px;padding:0 12px;font-size:12px;font-weight:600;white-space:nowrap;flex-shrink:0">🔍 Check</button>
+          </div>
         </div>
-        <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%">🔄 Update App from GitHub</button>
+        <!-- Check result banner — hidden until a check is run -->
+        <div id="branchCheckResult" style="display:none;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid transparent"></div>
+        <button class="icon-btn accent" id="updateBtn" onclick="triggerAppUpdate()" style="font-weight:600;font-size:12px;padding:9px 14px;width:100%;display:none">🔄 Update App from GitHub</button>
         <div id="updateStatusText" style="font-size:11px;color:var(--text-muted);min-height:14px;line-height:1.5;text-align:center"></div>
         <pre id="updateLogOutput" style="display:none;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--font-mono);font-size:10px;color:var(--text-muted);max-height:120px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;margin:0"></pre>
       </div>
@@ -2031,8 +2030,13 @@ function renderModelsTab() {
   const enabledProviders = _poolKeys ? _poolKeys.filter(k => k.enabled !== false) : [];
   const modelsSet = new Set();
   enabledProviders.forEach(k => {
-    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
-    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+    const list = (k.allowedModels && k.allowedModels.length > 0)
+      ? k.allowedModels.map(modelEntryName)
+      : (k.cachedModels || []);
+    list.forEach(m => {
+      const name = modelEntryName(m);
+      if (name) modelsSet.add(name);
+    });
   });
   _activeLogs.forEach(log => {
     if (log.model) modelsSet.add(log.model);
@@ -2186,59 +2190,66 @@ function renderModelsTab() {
   });
 
   if (filteredRows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">No models found matching filters.</td></tr>';
+    tbody.innerHTML = '<div class="empty-row" style="padding:24px;text-align:center">No models found matching filters.</div>';
     return;
   }
 
+  const MAX_LAT_MS = 10_000;
+
   tbody.innerHTML = filteredRows.map(row => {
-    const sc = !row.lastStatus ? '' : row.lastStatus < 300 ? 's2' : row.lastStatus < 500 ? 's4' : 's5';
-    const scText = !row.lastStatus ? '—' : row.lastStatus;
-    const rtText = row.avgLatency > 0 ? `${row.avgLatency}ms` : '—';
-
-
-    const isChecked = !_disabledModels.includes(row.name);
-    const checkboxHtml = `<input type="checkbox" value="${escHtml(row.name)}" ${isChecked ? 'checked' : ''} onchange="toggleModelTabCheckbox(this)" style="cursor:pointer;" />`;
-
     const aliveStatus = _modelsTabAliveState[row.name];
-    let aliveText = '';
-    let btnText = 'Check';
-    if (aliveStatus === 'alive') {
-      aliveText = '<span class="status-alive" style="margin-left: 6px;">Alive</span>';
-    } else if (aliveStatus === 'dead') {
-      aliveText = '<span class="status-dead" style="margin-left: 6px;">Dead</span>';
-    } else if (aliveStatus === 'checking') {
-      aliveText = '<span style="color:var(--text-muted); margin-left: 6px;">Testing...</span>';
-      btnText = '…';
-    }
-    const safeModelName = escHtml(row.name).replace(/'/g, "\\'");
-    const aliveColumn = `
-      <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-        <button class="models-btn" style="padding: 2px 6px; font-size: 10px; margin-left: 0;" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)">${btnText}</button>
-        ${aliveText}
-      </div>
-    `;
+    // Status dot class: map alive state + last HTTP status
+    let dotCls = 'unknown';
+    if      (aliveStatus === 'alive')    dotCls = 'alive';
+    else if (aliveStatus === 'dead')     dotCls = 'dead';
+    else if (aliveStatus === 'checking') dotCls = 'slow';
+    else if (row.lastStatus) dotCls = row.lastStatus < 300 ? 'alive' : row.lastStatus < 500 ? 'slow' : 'dead';
 
-    const tokenText = row.totalTokens > 0 ? formatTokenCount(row.totalTokens) : '—';
-    const provCount = row.supporting.length;
-    const totalP    = _poolKeys ? _poolKeys.filter(k => k.enabled !== false).length : 0;
-    const provBtnColor = provCount === 0 ? 'var(--text-dim)' : provCount === totalP ? 'var(--green)' : 'var(--accent)';
-    const provBtnLabel = provCount === 0 ? `0 / ${totalP}` : `${provCount} / ${totalP}`;
+    const safeModelName = escHtml(row.name).replace(/'/g, "\\'");
+
+    // Latency bar
+    const latMs  = row.avgLatency || 0;
+    const rtText = latMs > 0 ? (latMs >= 1000 ? `${(latMs/1000).toFixed(1)}s` : `${latMs}ms`) : '—';
+    const barPct = latMs > 0 ? Math.min(100, Math.round((latMs / MAX_LAT_MS) * 100)) : 0;
+    const barCls = dotCls === 'unknown' ? 'alive' : dotCls;
+    const latencyCell = `<div class="health-latency-wrap">
+      <div class="health-latency-bar-bg"><div class="health-latency-bar-fill ${barCls}" style="width:${barPct}%"></div></div>
+      <div class="health-latency-val">${rtText}</div>
+    </div>`;
+
+    // Last status badge
+    const scBadgeCls = !row.lastStatus ? 'unknown' : row.lastStatus < 300 ? 'alive' : row.lastStatus < 500 ? 'slow' : 'dead';
+    const scText     = !row.lastStatus ? '—' : String(row.lastStatus);
+    const statusBadge = `<span class="health-status-badge ${scBadgeCls}">${scText}</span>`;
+
+    // Providers button
+    const tokenText  = row.totalTokens > 0 ? formatTokenCount(row.totalTokens) : '—';
+    const provCount  = row.supporting.length;
+    const totalP     = _poolKeys ? _poolKeys.filter(k => k.enabled !== false).length : 0;
+    const provColor  = provCount === 0 ? 'var(--text-dim)' : provCount === totalP ? 'var(--green)' : 'var(--accent)';
+    const provLabel  = `${provCount} / ${totalP}`;
     const safeProviders = JSON.stringify(row.supporting).replace(/"/g, '&quot;');
     const provBtn = `<button onclick="showProviderPopup(this,'${escHtml(row.name)}',${safeProviders})"
-      style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provBtnColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provBtnLabel}</button>`;
+      style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provLabel}</button>`;
+
+    // Analytics button
     const analyticsBtn = `<button onclick="openModelAnalytics('${safeModelName}')"
       style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:5px;color:var(--purple);font-size:10px;font-weight:600;padding:2px 8px;cursor:pointer;white-space:nowrap">📊 View</button>`;
-    return `<tr data-model="${escHtml(row.name)}">
-      <td style="text-align:center">${checkboxHtml}</td>
-      <td style="font-family:var(--font-mono);color:var(--text);font-weight:500">${escHtml(row.name)}</td>
-      <td style="text-align:right;padding-right:16px">${row.requestCount || '—'}</td>
-      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'}">${tokenText}</td>
-      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.avgLatency > 0 ? 'var(--purple)' : 'var(--text-muted)'}">${rtText}</td>
-      <td style="text-align:center" class="${sc}">${scText}</td>
-      <td style="text-align:center">${provBtn}</td>
-      <td style="text-align:center">${aliveColumn}</td>
-      <td style="text-align:center">${analyticsBtn}</td>
-    </tr>`;
+
+    // Check dot — clicking triggers an alive check
+    const dotTitle = aliveStatus === 'checking' ? 'Checking…' : aliveStatus ? aliveStatus : 'Click to check';
+    const dotHtml  = `<div class="health-status-dot ${dotCls}" title="${dotTitle}" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)" style="cursor:pointer;flex-shrink:0"></div>`;
+
+    return `<div class="health-model-row" data-model="${escHtml(row.name)}" style="grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px">
+      ${dotHtml}
+      <div class="health-model-name" title="${escHtml(row.name)}">${escHtml(row.name)}</div>
+      <div style="font-size:12px;color:var(--text-muted);text-align:right;font-family:var(--font-mono)">${row.requestCount || '—'}</div>
+      <div style="font-size:12px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'};text-align:right;font-family:var(--font-mono)">${tokenText}</div>
+      ${latencyCell}
+      <div style="text-align:center">${statusBadge}</div>
+      <div style="text-align:center">${provBtn}</div>
+      <div style="text-align:center">${analyticsBtn}</div>
+    </div>`;
   }).join('');
   updateModelStatusSummary();
 }
@@ -5188,124 +5199,141 @@ function doLogout() {
   switchTab('monitor');
 }
 
-async function checkUpdates() {
-  const statusEl = document.getElementById('updateStatusText');
-  const btn = document.getElementById('updateBtn');
-  if (!statusEl || !btn) return;
+// Track the last check result so triggerAppUpdate can use it without re-fetching
+let _lastCheckData = null;
 
-  statusEl.textContent = 'Checking for updates...';
-  statusEl.style.color = 'var(--text-muted)';
+function resetUpdateCheck() {
+  _lastCheckData = null;
+  const resultEl  = document.getElementById('branchCheckResult');
+  const updateBtn = document.getElementById('updateBtn');
+  const statusEl  = document.getElementById('updateStatusText');
+  if (resultEl)  { resultEl.style.display = 'none'; resultEl.textContent = ''; }
+  if (updateBtn) { updateBtn.style.display = 'none'; }
+  if (statusEl)  { statusEl.textContent = ''; }
+}
+
+async function checkSelectedBranch() {
+  const select    = document.getElementById('updateTargetSelect');
+  const checkBtn  = document.getElementById('checkUpdateBtn');
+  const resultEl  = document.getElementById('branchCheckResult');
+  const updateBtn = document.getElementById('updateBtn');
+  const statusEl  = document.getElementById('updateStatusText');
+  if (!checkBtn || !resultEl) return;
+
+  const branch = select ? select.value : '';
+
+  checkBtn.disabled    = true;
+  checkBtn.textContent = '⏳ Checking…';
+  if (resultEl)  { resultEl.style.display = 'none'; }
+  if (updateBtn) { updateBtn.style.display = 'none'; }
+  if (statusEl)  { statusEl.textContent = ''; }
 
   try {
-    const res = await authFetch('/config/check-update');
+    const url = branch ? `/config/check-update?branch=${encodeURIComponent(branch)}` : '/config/check-update';
+    const res  = await authFetch(url);
     if (res.status === 401) return;
     const data = await res.json();
-    
-    if (data.ok) {
-      if (data.available) {
-        statusEl.textContent = `Update available! (${data.commitsBehind} commit${data.commitsBehind !== 1 ? 's' : ''} behind)`;
-        statusEl.style.color = 'var(--yellow)';
-        btn.textContent = '🔄 Update App from GitHub';
-        btn.classList.add('accent');
-        _updateAvailable = true;
-      } else {
-        statusEl.textContent = 'App is up to date.';
-        statusEl.style.color = 'var(--green)';
-        btn.textContent = '🔄 Reinstall/Force Update';
-        btn.classList.remove('accent');
-        _updateAvailable = false;
+    _lastCheckData = data;
+
+    if (!data.ok) {
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)';
+      resultEl.textContent = '❌ ' + (data.error || 'Check failed.');
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = '⚠️ Force Install Anyway';
+        updateBtn.className     = 'icon-btn';
+      }
+    } else if (data.available) {
+      const label = branch || data.branch || 'branch';
+      const isSwitching = !data.isSameBranch;
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(234,179,8,.3);background:rgba(234,179,8,.08);color:var(--yellow)';
+      resultEl.innerHTML = isSwitching
+        ? `⚡ <strong>${data.commitsBehind} new commit${data.commitsBehind !== 1 ? 's' : ''}</strong> on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code> — switching from <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(data.currentBranch)}</code>`
+        : `⚡ <strong>${data.commitsBehind} new commit${data.commitsBehind !== 1 ? 's' : ''}</strong> available on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code>`;
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = isSwitching ? `🔄 Switch to ${label} & Install` : '🔄 Pull & Install Update';
+        updateBtn.className     = 'icon-btn accent';
       }
     } else {
-      statusEl.textContent = data.error || 'Update check skipped (non-Git).';
-      statusEl.style.color = 'var(--text-muted)';
-      _updateAvailable = false;
+      const label = branch || data.branch || 'branch';
+      const isSwitching = !data.isSameBranch;
+      resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(34,197,94,.3);background:rgba(34,197,94,.08);color:var(--green)';
+      resultEl.innerHTML = isSwitching
+        ? `✅ No new commits — <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code> is at the same point as your current HEAD`
+        : `✅ Already up to date on <code style="font-size:10.5px;background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px">${escHtml(label)}</code>`;
+      if (updateBtn) {
+        updateBtn.style.display = '';
+        updateBtn.textContent   = isSwitching ? `🔁 Force Switch to ${label}` : '🔁 Force Reinstall';
+        updateBtn.className     = 'icon-btn';
+      }
     }
   } catch (err) {
-    statusEl.textContent = 'Failed to check updates: ' + err.message;
-    statusEl.style.color = 'var(--red)';
-    _updateAvailable = false;
+    resultEl.style.cssText = 'display:block;border-radius:6px;padding:8px 12px;font-size:11.5px;line-height:1.5;border:1px solid rgba(239,68,68,.3);background:rgba(239,68,68,.08);color:var(--red)';
+    resultEl.textContent = '❌ Network error: ' + err.message;
+    _lastCheckData = null;
+  } finally {
+    checkBtn.disabled    = false;
+    checkBtn.textContent = '🔍 Check';
   }
 }
 
-async function triggerAppUpdate() {
-  const btn = document.getElementById('updateBtn');
+// Legacy wrapper kept for the profile tab auto-check on load
+async function checkUpdates() {
+  // No-op: checking is now explicit via the Check button.
+  // Just clear the status text so it doesn't show stale info.
   const statusEl = document.getElementById('updateStatusText');
-  const logEl = document.getElementById('updateLogOutput');
-  
+  if (statusEl) statusEl.textContent = '';
+}
+
+async function triggerAppUpdate() {
+  const btn      = document.getElementById('updateBtn');
+  const statusEl = document.getElementById('updateStatusText');
+  const logEl    = document.getElementById('updateLogOutput');
   if (!btn || !statusEl || !logEl) return;
 
-  btn.disabled = true;
-  const origText = btn.textContent;
-  statusEl.textContent = 'Checking update availability...';
-  statusEl.style.color = 'var(--text-muted)';
-  logEl.style.display = 'none';
-  logEl.textContent = '';
-
   const targetSelect = document.getElementById('updateTargetSelect');
-  const target = targetSelect ? targetSelect.value : '';
+  const target       = targetSelect ? targetSelect.value : '';
 
-  if (target) {
-    if (!confirm(`Switch app branch/version to "${target}"? This will checkout the target and run npm install.`)) {
-      btn.disabled = false;
-      statusEl.textContent = '';
-      return;
-    }
-  } else {
-    try {
-      const checkRes = await authFetch('/config/check-update');
-      const checkData = await checkRes.json();
-
-      if (checkData.ok) {
-        _updateAvailable = checkData.available;
-        if (!_updateAvailable) {
-          if (!confirm('No new updates are available on the current branch. Do you want to force reinstall the current version anyway?')) {
-            btn.disabled = false;
-            statusEl.textContent = 'App is up to date.';
-            statusEl.style.color = 'var(--green)';
-            return;
-          }
-        } else {
-          if (!confirm(`Update available! (${checkData.commitsBehind} commit(s) behind). Do you want to pull and install it now?`)) {
-            btn.disabled = false;
-            statusEl.textContent = `Update available! (${checkData.commitsBehind} commit(s) behind)`;
-            statusEl.style.color = 'var(--yellow)';
-            return;
-          }
-        }
-      } else {
-        if (!confirm('Could not verify updates: ' + (checkData.error || 'Unknown error') + '\n\nDo you want to attempt the update anyway?')) {
-          btn.disabled = false;
-          statusEl.textContent = checkData.error || 'Update check failed.';
-          return;
-        }
-      }
-    } catch (err) {
-      if (!confirm('Failed to check updates: ' + err.message + '\n\nDo you want to attempt the update anyway?')) {
-        btn.disabled = false;
-        statusEl.textContent = 'Failed to check updates.';
-        return;
-      }
-    }
+  // If they haven't run a check yet, require it first
+  if (!_lastCheckData) {
+    statusEl.textContent = '⚠️ Please click Check first to preview the changes.';
+    statusEl.style.color = 'var(--yellow)';
+    return;
   }
 
-  btn.textContent = '⚙️ Updating...';
-  statusEl.textContent = target ? `Switching app to "${target}" and running npm install...` : 'Running updates on the server (git pull & npm install)...';
+  // Confirm before proceeding
+  const label = target || _lastCheckData?.branch || 'current branch';
+  const isSwitching = _lastCheckData && !_lastCheckData.isSameBranch;
+  const msg = isSwitching
+    ? `Switch to branch "${label}" and run npm install? The server will restart.`
+    : (_lastCheckData?.available
+        ? `Pull ${_lastCheckData.commitsBehind} new commit(s) on "${label}" and run npm install? The server will restart.`
+        : `Force reinstall on "${label}" (already up to date). The server will restart.`);
+
+  if (!confirm(msg)) return;
+
+  btn.disabled    = true;
+  const origText  = btn.textContent;
+  statusEl.textContent = target ? `Switching to "${target}" and running npm install…` : 'Running git pull & npm install…';
   statusEl.style.color = 'var(--text-muted)';
+  logEl.style.display  = 'none';
+  logEl.textContent    = '';
+  btn.textContent      = '⚙️ Updating…';
 
   try {
-    const res = await authFetch('/config/update', {
-      method: 'POST',
+    const res  = await authFetch('/config/update', {
+      method:  'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ target: target || undefined })
+      body:    JSON.stringify({ target: target || undefined }),
     });
-    
     const data = await res.json();
-    
+
     if (res.status === 400) {
       statusEl.textContent = '❌ Update blocked';
       statusEl.style.color = 'var(--red)';
       alert('Update blocked:\n' + (data.error || 'Check server configuration.'));
-      btn.disabled = false;
+      btn.disabled    = false;
       btn.textContent = origText;
       return;
     }
@@ -5313,30 +5341,31 @@ async function triggerAppUpdate() {
     if (!res.ok || !data.ok) {
       statusEl.textContent = '❌ Update failed';
       statusEl.style.color = 'var(--red)';
-      logEl.style.display = 'block';
-      logEl.textContent = (data.error || 'Unknown error') + '\n\nLogs:\n' + (data.log || '');
-      btn.disabled = false;
+      logEl.style.display  = 'block';
+      logEl.textContent    = (data.error || 'Unknown error') + '\n\nLogs:\n' + (data.log || '');
+      btn.disabled    = false;
       btn.textContent = origText;
       return;
     }
 
-    statusEl.textContent = '✅ Update successful! Restarting server...';
+    statusEl.textContent = '✅ Update successful! Restarting server…';
     statusEl.style.color = 'var(--green)';
-    logEl.style.display = 'block';
-    logEl.textContent = data.log || 'No logs returned.';
-    btn.textContent = '🔄 Restarting...';
-
+    logEl.style.display  = 'block';
+    logEl.textContent    = data.log || 'No logs returned.';
+    btn.textContent      = '🔄 Restarting…';
+    resetUpdateCheck();
     pollServerRestart();
 
   } catch (err) {
     statusEl.textContent = '❌ Connection error';
     statusEl.style.color = 'var(--red)';
-    logEl.style.display = 'block';
-    logEl.textContent = err.message;
-    btn.disabled = false;
+    logEl.style.display  = 'block';
+    logEl.textContent    = err.message;
+    btn.disabled    = false;
     btn.textContent = origText;
   }
 }
+
 
 function pollServerRestart() {
   const statusEl = document.getElementById('updateStatusText');
@@ -5693,8 +5722,13 @@ function getAllKnownModels() {
   const modelsSet = new Set();
   const keys = _poolKeys || [];
   keys.forEach(k => {
-    if (k.allowedModels) k.allowedModels.forEach(e => modelsSet.add(modelEntryName(e)));
-    if (k.cachedModels)  k.cachedModels.forEach(m => modelsSet.add(m));
+    const list = (k.allowedModels && k.allowedModels.length > 0)
+      ? k.allowedModels.map(modelEntryName)
+      : (k.cachedModels || []);
+    list.forEach(m => {
+      const name = modelEntryName(m);
+      if (name) modelsSet.add(name);
+    });
   });
   _activeLogs.forEach(log => {
     if (log.model) modelsSet.add(log.model);

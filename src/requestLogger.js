@@ -37,8 +37,27 @@ class RequestLogger {
   _loadFromDisk() {
     if (!fs.existsSync(LOGS_FILE)) return;
     try {
+      // Guard against excessively large log files (#23)
+      const stat = fs.statSync(LOGS_FILE);
+      const MAX_LOAD_BYTES = 10 * 1024 * 1024; // 10 MB
+      let raw;
+      if (stat.size > MAX_LOAD_BYTES) {
+        // Read only the tail of the file
+        const fd = fs.openSync(LOGS_FILE, 'r');
+        const buf = Buffer.alloc(MAX_LOAD_BYTES);
+        fs.readSync(fd, buf, 0, MAX_LOAD_BYTES, stat.size - MAX_LOAD_BYTES);
+        fs.closeSync(fd);
+        raw = buf.toString('utf8');
+        // Drop the first (likely partial) line
+        const firstNewline = raw.indexOf('\n');
+        if (firstNewline >= 0) raw = raw.slice(firstNewline + 1);
+        console.log(`[Logger] Log file is ${(stat.size / 1024 / 1024).toFixed(1)} MB — loaded last ${(MAX_LOAD_BYTES / 1024 / 1024).toFixed(0)} MB`);
+      } else {
+        raw = fs.readFileSync(LOGS_FILE, 'utf8');
+      }
+
       const cutoff = Date.now() - MAX_FILE_DAYS * 86400_000;
-      const lines  = fs.readFileSync(LOGS_FILE, 'utf8').split('\n').filter(Boolean);
+      const lines  = raw.split('\n').filter(Boolean);
       const loaded = [];
       for (const line of lines) {
         try {
