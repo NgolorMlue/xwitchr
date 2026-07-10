@@ -381,7 +381,7 @@ app.get('/config/check-update', (req, res) => {
       const compareBranch = targetBranch || currentBranch;
       const originRef = `origin/${compareBranch}`;
 
-      exec(`git rev-list --count HEAD..${originRef}`, (diffErr, stdout) => {
+      exec(`git rev-list --count "HEAD..${originRef}"`, (diffErr, stdout) => {
         if (diffErr) {
           console.warn(`[Update Check] git rev-list failed for ${originRef}:`, diffErr.message);
           return res.json({ ok: false, available: false, error: `Branch "${compareBranch}" not found on remote or failed to compare: ` + diffErr.message });
