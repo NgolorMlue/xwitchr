@@ -201,7 +201,7 @@ function save(config) {
   if (!merged.anthropicProxyToken) merged.anthropicProxyToken = existing.anthropicProxyToken || generateToken();
   if (!merged.googleProxyToken)    merged.googleProxyToken    = existing.googleProxyToken    || generateToken();
   if (!merged.apiModes || typeof merged.apiModes !== 'object') merged.apiModes = DEFAULTS.apiModes;
-  merged.apiModes.openai = true; // OpenAI mode always on
+  merged.apiModes.openai = typeof merged.apiModes.openai === 'boolean' ? merged.apiModes.openai : true;
   const parsedPort = parseInt(merged.port, 10);
   merged.port = (parsedPort >= 1 && parsedPort <= 65535) ? parsedPort : 51067;
   merged.httpsEnabled  = !!merged.httpsEnabled;

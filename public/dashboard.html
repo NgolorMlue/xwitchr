@@ -1435,8 +1435,8 @@
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border)">
           <div style="font-size:14px;font-weight:600;flex:1">OpenAI Compatible</div>
-          <label class="api-mode-toggle" title="Always enabled">
-            <input type="checkbox" checked disabled />
+          <label class="api-mode-toggle" title="Enable OpenAI API mode">
+            <input type="checkbox" id="apiModeOpenai" onchange="updateApiMode('openai',this.checked)" />
             <span class="slider"></span>
           </label>
         </div>
@@ -4481,8 +4481,10 @@ async function loadConfig(){
     }
     // Load API modes
     const modes = cfg.apiModes || {};
+    const elOpe = document.getElementById('apiModeOpenai');
     const elAnt = document.getElementById('apiModeAnthropic');
     const elGoo = document.getElementById('apiModeGoogle');
+    if (elOpe) elOpe.checked = modes.openai !== false;
     if (elAnt) elAnt.checked = !!modes.anthropic;
     if (elGoo) elGoo.checked = !!modes.google;
     if (document.getElementById('updateUsername')) {
@@ -4624,7 +4626,7 @@ function updateApiMode(mode, val) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiModes: {
-      openai: true,
+      openai:    document.getElementById('apiModeOpenai')?.checked    || false,
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
       google:    document.getElementById('apiModeGoogle')?.checked    || false,
       [mode]: val,
@@ -5276,7 +5278,7 @@ function buildConfigPayload() {
     keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',
     providers:         getProviders(),
     apiModes: {
-      openai:    true,
+      openai:    document.getElementById('apiModeOpenai')?.checked || false,
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
       google:    document.getElementById('apiModeGoogle')?.checked    || false,
     },

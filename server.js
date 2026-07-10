@@ -169,6 +169,17 @@ function authMiddleware(req, res, next) {
     const isAnthropic = req.path === '/v1/messages' || req.path === '/proxy/messages';
     const isGoogle    = req.path.startsWith('/v1/beta/') || req.path.startsWith('/proxy/beta/');
 
+    // Check if the requested API mode is enabled
+    if (isAnthropic && !cfg.apiModes?.anthropic) {
+      return res.status(403).json({ error: 'Anthropic API mode is disabled in settings.' });
+    }
+    if (isGoogle && !cfg.apiModes?.google) {
+      return res.status(403).json({ error: 'Google API mode is disabled in settings.' });
+    }
+    if (!isAnthropic && !isGoogle && !cfg.apiModes?.openai) {
+      return res.status(403).json({ error: 'OpenAI API mode is disabled in settings.' });
+    }
+
     const authHeader = req.headers['authorization'] || '';
     const match      = authHeader.match(/^Bearer\s+(.+)$/i);
     const provided   = match ? match[1] : req.headers['x-proxy-token'];
