@@ -24,6 +24,7 @@ const DEFAULTS = {
   providers:         [],
   apiModes:          { openai: true, anthropic: false, google: false },
   disabledModels:    [],
+  healthCheckInterval: 4, // in hours
   dashboardUsername: '',
   dashboardPasswordHash: '',
   port:              51067,
@@ -145,6 +146,7 @@ function load() {
   cfg.providers = (cfg.providers || []).map(sanitizeProvider).filter(p => p.url && p.key);
 
   cfg.disabledModels = Array.isArray(cfg.disabledModels) ? cfg.disabledModels.map(String) : [];
+  cfg.healthCheckInterval = typeof cfg.healthCheckInterval === 'number' && cfg.healthCheckInterval > 0 ? cfg.healthCheckInterval : 4;
 
   cfg.customModels = Array.isArray(cfg.customModels)
     ? cfg.customModels.map(cm => {
@@ -208,6 +210,7 @@ function save(config) {
   merged.httpsCertPath = String(merged.httpsCertPath || '').trim();
   merged.httpsKeyPath  = String(merged.httpsKeyPath  || '').trim();
   merged.disabledModels = Array.isArray(merged.disabledModels) ? merged.disabledModels.map(String) : (existing.disabledModels || []);
+  merged.healthCheckInterval = typeof config.healthCheckInterval === 'number' && config.healthCheckInterval > 0 ? config.healthCheckInterval : 4;
   merged.customModels = Array.isArray(config.customModels)
     ? config.customModels.map(cm => {
         if (!cm || typeof cm !== 'object' || !cm.name) return null;

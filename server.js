@@ -73,7 +73,7 @@ const healthChecker = new ModelHealthChecker(
     console.log('[HealthChecker] Pool rebuilt with updated model health states');
   }
 );
-healthChecker.start(4 * 60 * 60 * 1000); // 4-hour interval
+healthChecker.start((cfg.healthCheckInterval || 4) * 60 * 60 * 1000);
 
 // ── Shared constants ──────────────────────────────────────────────────────
 // Headers that should not be forwarded between client ↔ upstream
@@ -333,7 +333,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'keyInjectParam', 'keyInjectHeader', 'providers', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude', 'disabledModels', 'customModels',
+  'healthCheckExclude', 'disabledModels', 'customModels', 'healthCheckInterval',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -349,8 +349,9 @@ app.post('/config', (req, res) => {
     const saved = configStore.save({ ...cfg, ...patch });
     cfg  = saved;
     pool = buildPool(cfg);
-    // Re-run health check immediately so new providers/models are probed right away
-    healthChecker.runCheck().catch(e => console.warn('[HealthChecker] Post-config check error:', e.message));
+    // Restart health check daemon with updated interval and run check immediately
+    healthChecker.stop();
+    healthChecker.start((cfg.healthCheckInterval || 4) * 60 * 60 * 1000);
     console.log(`[Config] Updated — ${cfg.providers.length} providers`);
     res.json({ ok: true, message: `Config saved. ${cfg.providers.length} providers loaded.`, providerCount: cfg.providers.length });
   } catch (err) {
