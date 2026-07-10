@@ -1672,6 +1672,15 @@
             
             <button class="icon-btn" style="margin-top:8px; align-self:flex-start; font-size:12px" id="addFallbackRowBtn" onclick="addFallbackRow()">＋ Add Fallback Model</button>
           </div>
+          
+          <div class="form-group" style="border-top:1px dashed var(--border); padding-top:16px; margin-top:8px;">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Bulk Paste Backing Models</span>
+              <span style="font-size:10px; font-weight:normal; color:var(--text-dim);">One per line, or comma-separated</span>
+            </label>
+            <textarea class="form-input" id="customModelBulkPasteInput" rows="3" placeholder="gpt-4o&#10;claude-3-5-sonnet&#10;gemini-1.5-pro" style="font-family:var(--font-mono); font-size:12px; resize:vertical; width:100%; box-sizing:border-box; margin-bottom:8px;"></textarea>
+            <button class="icon-btn" style="font-size:12px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border2); color:var(--accent);" onclick="applyCustomModelBulkPaste()">📋 Load Bulk Paste</button>
+          </div>
         </div>
         
         <div class="provider-actions" style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px; display:flex; gap:8px;">
@@ -6405,6 +6414,39 @@ function addFallbackRow(val = '') {
   `;
   container.appendChild(row);
   updateFallbackLabels();
+}
+
+function applyCustomModelBulkPaste() {
+  const area = document.getElementById('customModelBulkPasteInput');
+  const text = area.value.trim();
+  if (!text) {
+    alert('Please paste some model IDs first.');
+    return;
+  }
+  
+  const parsed = text.split(/[\n,;]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+    
+  if (parsed.length === 0) {
+    alert('No valid model IDs found.');
+    return;
+  }
+  
+  if (parsed.length > 20) {
+    alert('You pasted ' + parsed.length + ' models. Only the first 20 will be kept.');
+  }
+  
+  const modelsToKeep = parsed.slice(0, 20);
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  
+  modelsToKeep.forEach(m => {
+    addFallbackRow(m);
+  });
+  
+  area.value = '';
 }
 
 function removeFallbackRow(btn) {
