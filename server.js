@@ -80,8 +80,8 @@ healthChecker.start(4 * 60 * 60 * 1000); // 4-hour interval
 const SKIP_PROXY_HEADERS = new Set(['transfer-encoding','connection','keep-alive',
   'upgrade','proxy-authenticate','proxy-authorization','te','trailer']);
 
-// Safe git target regex — only allow branch/tag names (alphanumeric, dots, hyphens, slashes, underscores)
-const SAFE_GIT_TARGET = /^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*$/;
+// Safe git target regex — only allow branch/tag names (alphanumeric, dots, hyphens, slashes, underscores, parentheses)
+const SAFE_GIT_TARGET = /^[a-zA-Z0-9][a-zA-Z0-9._\-\/()]*$/;
 
 // ── Shared utility: timing-safe token comparison ──────────────────────────
 function checkTokenEquals(provided, stored) {
