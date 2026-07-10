@@ -55,7 +55,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels, c.customModels);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -322,7 +322,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'keyInjectParam', 'keyInjectHeader', 'providers', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude', 'disabledModels',
+  'healthCheckExclude', 'disabledModels', 'customModels',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -859,6 +859,14 @@ app.get(['/v1/models', '/proxy/models'], (req, res) => {
       }
     }
   }
+  if (Array.isArray(cfg.customModels)) {
+    for (const cm of cfg.customModels) {
+      if (cm.name && !seen.has(cm.name)) {
+        seen.add(cm.name);
+        models.push({ id: cm.name, object: 'model', created: 0, owned_by: 'router' });
+      }
+    }
+  }
   res.json({ object: 'list', data: models });
 });
 
@@ -962,7 +970,28 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       const inputFormat  = req._inputFormat  || 'openai';
       const requiredType = req._requiredType || null;
 
-      provider = pool.getProvider(requestedModel, excludeSet, 0, requiredType);
+      let resolvedModel = requestedModel;
+      const customModel = pool.customModels?.find(cm => cm.name === requestedModel);
+      if (customModel) {
+        let found = false;
+        let lastErr = null;
+        for (const backingModel of customModel.models) {
+          try {
+            provider = pool.getProvider(backingModel, excludeSet, 0, requiredType);
+            resolvedModel = backingModel;
+            found = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+            console.log(`[CustomModel] Fallback check failed for backing model "${backingModel}" in custom model "${requestedModel}": ${e.message}`);
+          }
+        }
+        if (!found) {
+          throw new Error(lastErr ? lastErr.message : `ALL_FALLBACKS_EXHAUSTED_FOR_CUSTOM_MODEL:${requestedModel}`);
+        }
+      } else {
+        provider = pool.getProvider(requestedModel, excludeSet, 0, requiredType);
+      }
       keyHint  = `...${provider.key.slice(-6)}`;
 
       const providerType = provider.type || 'openai';
@@ -974,7 +1003,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       let urlObj;
       if (providerType === 'google') {
         const action = wantsStream ? 'streamGenerateContent' : 'generateContent';
-        urlObj = new URL(`${provider.url.replace(/\/$/, '')}/models/${requestedModel || 'gemini-pro'}:${action}`);
+        urlObj = new URL(`${provider.url.replace(/\/$/, '')}/models/${resolvedModel || 'gemini-pro'}:${action}`);
         urlObj.searchParams.set('key', provider.key);
         if (wantsStream) urlObj.searchParams.set('alt', 'sse');
       } else {
@@ -1007,6 +1036,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       }
 
       // ── Body preparation ───────────────────────────────────────────────────
+      if (req.body && typeof req.body === 'object' && req.body.model) {
+        req.body.model = resolvedModel;
+      }
+      if (req.query.model) {
+        req.query.model = resolvedModel;
+      }
+
       const isBodyMethod = !['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase());
       let bodyStr;
       if (isMultipart) {
@@ -1033,13 +1069,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         delete upstreamHeaders['content-length'];
       }
 
-      pool.recordRequest(provider, requestedModel);
+      pool.recordRequest(provider, resolvedModel);
 
       // ── Streaming path ─────────────────────────────────────────────────────
       // Google native streaming conversion is not yet implemented — return a clear error (#20)
       if (wantsStream && providerType === 'google') {
         const responseTime = Date.now() - startTime;
-        reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: 501, responseTime, error: 'Streaming not supported for Google native providers. Set stream:false or use an OpenAI-compatible provider.', payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: null });
+        reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: 501, responseTime, error: 'Streaming not supported for Google native providers. Set stream:false or use an OpenAI-compatible provider.', payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: null });
         return res.status(501).json({ error: 'Not Implemented', message: 'Streaming is not supported for Google native API providers via this router. Set "stream": false or use an OpenAI-compatible provider.' });
       }
       if (wantsStream) {
@@ -1090,7 +1126,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
             if (needsConversion && providerType === 'anthropic') {
               // Convert Anthropic SSE → OpenAI SSE on the fly
-              const sseState = { id: null, model: requestedModel, created: Math.floor(Date.now() / 1000) };
+              const sseState = { id: null, model: resolvedModel, created: Math.floor(Date.now() / 1000) };
               let lineBuf = '';
               let curEvent = '';
 
@@ -1126,8 +1162,8 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
               proxyRes.on('error', (err) => { req.off('close', onClientClose); settle(rejectStream, err); });
               proxyRes.on('end', () => {
                 req.off('close', onClientClose);
-                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, requestedModel);
-                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
+                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, resolvedModel);
+                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
                 settle(resolveStream, true);
               });
 
@@ -1165,8 +1201,8 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
                     } catch { /* skip malformed line, keep scanning */ }
                   }
                 }
-                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, requestedModel);
-                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
+                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, resolvedModel);
+                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
                 settle(resolveStream, true);
               });
             }
@@ -1222,7 +1258,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           const resJson = JSON.parse(sendData.toString('utf8'));
           let converted;
           if (providerType === 'anthropic') converted = fmt.anthropicToOpenai(resJson);
-          else if (providerType === 'google')    converted = fmt.googleToOpenai(resJson, requestedModel);
+          else if (providerType === 'google')    converted = fmt.googleToOpenai(resJson, resolvedModel);
           if (converted) {
             sendData = Buffer.from(JSON.stringify(converted));
             res.setHeader('content-type', 'application/json');
@@ -1242,13 +1278,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
       res.status(upstream.status).send(sendData);
 
-      if (responseTokens?.total > 0) pool.recordTokens(provider, responseTokens.total, requestedModel);
+      if (responseTokens?.total > 0) pool.recordTokens(provider, responseTokens.total, resolvedModel);
 
       reqLogger.log({
         method: req.method, path: req.path, keyHint,
         urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0],
         status: upstream.status, responseTime, payload: reqPayloadStr,
-        model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: responseTokens,
+        model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: responseTokens,
       });
       return;
 

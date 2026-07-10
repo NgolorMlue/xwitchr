@@ -779,6 +779,7 @@
       <button class="tab-btn" id="tab-statistics" onclick="switchTab('statistics')">📈 Statistics</button>
       <button class="tab-btn" id="tab-log" onclick="switchTab('log')">📋 Log</button>
       <button class="tab-btn" id="tab-models" onclick="switchTab('models')">🤖 Models</button>
+      <button class="tab-btn" id="tab-custom-models" onclick="switchTab('custom-models')">🛠️ Custom Models</button>
       <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
       <button class="tab-btn" id="tab-profile" onclick="switchTab('profile')">👤 Profile</button>
       <button class="tab-btn" id="tab-health" onclick="switchTab('health')">🩺 Health</button>
@@ -1624,6 +1625,75 @@
 
 </div><!-- end health -->
 
+<!-- ══ CUSTOM MODELS ══ -->
+<div class="page fade-in" id="page-custom-models">
+  <div class="settings-grid">
+    
+    <!-- LEFT: List of existing Custom Models -->
+    <div class="settings-col">
+      <div class="card" style="flex:1; display:flex; flex-direction:column; min-height: 400px;">
+        <div class="section-header">
+          <div class="section-title">🛠️ Custom Models</div>
+        </div>
+        <div class="form-hint" style="margin-bottom:12px">
+          Custom models route to a list of fallback models. If a backing model is disabled/down, the router falls back to the next model in the list.
+        </div>
+        
+        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="customModelsList">
+          <!-- Custom models rendered here -->
+        </div>
+        
+        <button class="add-row-btn" style="border:1px dashed var(--border2); border-radius:8px; margin-top:12px; padding:12px; background:none; color:var(--text); cursor:pointer; font-weight:500; font-family:'Inter',sans-serif; transition:background .15s, border-color .15s;" onclick="addNewCustomModel()" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">＋ Create Custom Model</button>
+      </div>
+    </div>
+    
+    <!-- RIGHT: Edit Active Custom Model -->
+    <div class="settings-col" id="customModelEditCol" style="display:none;">
+      <div class="card" style="display:flex; flex-direction:column; height:100%; width:100%">
+        <div class="section-header" style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div class="section-title" id="editModelTitle">Edit Custom Model</div>
+          <button class="del-btn" onclick="closeEditModel()" title="Close editor" style="padding:6px 10px; font-size:12px">✕</button>
+        </div>
+        
+        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding-right:6px;">
+          <div class="form-group">
+            <label class="form-label" for="customModelNameInput">Custom Model Name</label>
+            <input class="form-input" id="customModelNameInput" type="text" placeholder="e.g. agentic-xwtchr" style="font-family:var(--font-mono)" />
+            <div class="form-hint">This is the model name clients will request.</div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Backing Models (Fallback Order)</label>
+            <div class="form-hint" style="margin-bottom:8px">Define fallback order (1 = primary, 10 = final fallback). Empty fields are ignored.</div>
+            
+            <div id="fallbackListContainer" style="display:flex; flex-direction:column; gap:8px;">
+              <!-- Dynamic list of fallback rows -->
+            </div>
+            
+            <button class="icon-btn" style="margin-top:8px; align-self:flex-start; font-size:12px" id="addFallbackRowBtn" onclick="addFallbackRow()">＋ Add Fallback Model</button>
+          </div>
+        </div>
+        
+        <div class="provider-actions" style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px; display:flex; gap:8px;">
+          <button class="save-btn" style="padding:8px 20px; font-size:12.5px" onclick="saveCustomModelEdits()">Apply Edits</button>
+          <button class="icon-btn" onclick="closeEditModel()">Cancel</button>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Save Bar -->
+  <div class="save-bar">
+    <button class="save-btn" id="saveCustomModelsBtn" onclick="saveConfig({ keepTab: true })">💾 Save &amp; Apply</button>
+    <div class="save-status hidden" id="saveCustomModelsStatus"></div>
+    <div style="flex:1"></div>
+    <div style="font-size:11px;color:var(--text-dim)">Saved to <code style="color:var(--text-muted)">config.json</code> — no restart needed</div>
+  </div>
+  
+  <datalist id="knownModelsDatalist"></datalist>
+</div>
+
 <!-- ══ MODEL MODAL ══ -->
 <div id="modelModal" class="modal-overlay" style="display:none" onclick="onModalOverlayClick(event)">
   <div class="modal-box" onclick="event.stopPropagation()">
@@ -1952,6 +2022,10 @@ function switchTab(tab) {
   if (tab === 'models') {
     loadConfig();
     renderModelsTab();
+  }
+  if (tab === 'custom-models') {
+    loadConfig();
+    renderCustomModels();
   }
   if (tab === 'health') {
     fetchHealthData();
@@ -4337,6 +4411,7 @@ setInterval(fetchLogs,1500);
 // SETTINGS: Load
 // ════════════════════════════════════════════════════════════
 let _providers = [];
+let _customModels = [];
 
 async function loadConfig(){
   try{
@@ -4374,6 +4449,8 @@ async function loadConfig(){
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
     _disabledModels = cfg.disabledModels || [];
+    _customModels = cfg.customModels || [];
+    renderCustomModels();
     updateModelStatusSummary();
     // If provider list changed, clear stale model cache to force a fresh load
     if (_providers.length !== prevProviderCount) {
@@ -5195,6 +5272,7 @@ function buildConfigPayload() {
     httpsCertPath: document.getElementById('httpsCertPath')?.value?.trim() || '',
     httpsKeyPath:  document.getElementById('httpsKeyPath')?.value?.trim()  || '',
     healthCheckExclude: document.getElementById('healthCheckExclude')?.value || '',
+    customModels:  _customModels,
   };
 }
 
@@ -6189,6 +6267,192 @@ async function openHealthAnalytics(model, url) {
       </div>
     `;
   }
+}
+
+// ════════════════════════════════════════════════════════════
+// CUSTOM MODELS TAB SCRIPTING
+// ════════════════════════════════════════════════════════════
+let _editingModelIndex = null;
+
+function renderCustomModels() {
+  const container = document.getElementById('customModelsList');
+  if (!container) return;
+  
+  const datalist = document.getElementById('knownModelsDatalist');
+  if (datalist) {
+    const known = getAllKnownModels();
+    datalist.innerHTML = known.map(m => `<option value="${escHtml(m)}"></option>`).join('');
+  }
+  
+  if (!_customModels || _customModels.length === 0) {
+    container.innerHTML = '<div class="empty-row" style="text-align:center; padding:24px; color:var(--text-dim);">No custom models created yet. Click "Create Custom Model" to start.</div>';
+    return;
+  }
+  
+  container.innerHTML = _customModels.map((cm, idx) => {
+    const fallbackList = cm.models.map((m, i) => {
+      const isHealthy = !_disabledModels.includes(m);
+      const dotColor = isHealthy ? 'var(--green)' : 'var(--red)';
+      const textStyle = isHealthy ? '' : 'text-decoration: line-through; opacity: 0.5;';
+      return `<div style="display:flex; align-items:center; gap:6px; font-size:11.5px; font-family:var(--font-mono); ${textStyle}">
+        <span style="width:6px; height:6px; border-radius:50%; background:${dotColor}; display:inline-block;"></span>
+        <span style="color:var(--text-dim)">#${i+1}:</span> <span>${escHtml(m)}</span>
+      </div>`;
+    }).join('');
+    
+    return `<div class="card" style="background:var(--surface2); border:1px solid var(--border); padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-family:var(--font-mono); font-weight:700; font-size:14px; color:var(--accent);">${escHtml(cm.name)}</span>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn" style="padding:4px 8px; font-size:11.5px;" onclick="editCustomModel(${idx})">📝 Edit</button>
+          <button class="del-btn" style="padding:4px 8px; font-size:11.5px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="deleteCustomModel(${idx})">✕ Delete</button>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--border); padding-top:8px;">
+        ${fallbackList || '<div style="font-size:11.5px; color:var(--text-dim)">No fallback models defined.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addNewCustomModel() {
+  _editingModelIndex = null;
+  document.getElementById('editModelTitle').textContent = 'Create Custom Model';
+  document.getElementById('customModelNameInput').value = '';
+  document.getElementById('customModelNameInput').disabled = false;
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    addFallbackRow('');
+  }
+  
+  document.getElementById('customModelEditCol').style.display = 'flex';
+  document.getElementById('customModelNameInput').focus();
+}
+
+function editCustomModel(idx) {
+  const cm = _customModels[idx];
+  if (!cm) return;
+  
+  _editingModelIndex = idx;
+  document.getElementById('editModelTitle').textContent = 'Edit Custom Model';
+  document.getElementById('customModelNameInput').value = cm.name;
+  document.getElementById('customModelNameInput').disabled = false;
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  
+  cm.models.forEach(m => {
+    addFallbackRow(m);
+  });
+  
+  if (cm.models.length < 3) {
+    for (let i = cm.models.length; i < 3; i++) {
+      addFallbackRow('');
+    }
+  }
+  
+  document.getElementById('customModelEditCol').style.display = 'flex';
+}
+
+function deleteCustomModel(idx) {
+  if (!confirm(`Delete custom model "${_customModels[idx].name}"?`)) return;
+  _customModels.splice(idx, 1);
+  renderCustomModels();
+  closeEditModel();
+}
+
+function closeEditModel() {
+  document.getElementById('customModelEditCol').style.display = 'none';
+  _editingModelIndex = null;
+}
+
+function addFallbackRow(val = '') {
+  const container = document.getElementById('fallbackListContainer');
+  const count = container.children.length;
+  if (count >= 10) {
+    alert('Maximum of 10 fallback models allowed.');
+    return;
+  }
+  
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; align-items:center; gap:8px;';
+  row.className = 'fallback-row';
+  row.innerHTML = `
+    <span style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); width:30px; text-align:right;">#${count+1}</span>
+    <input class="form-input fallback-input" list="knownModelsDatalist" type="text" placeholder="Type or select model..." value="${escHtml(val)}" style="flex:1; font-family:var(--font-mono); font-size:12.5px; padding:6px 10px;" />
+    <div style="display:flex; gap:2px;">
+      <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, -1)" title="Move Up">↑</button>
+      <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, 1)" title="Move Down">↓</button>
+      <button class="del-btn" style="padding:4px 6px; font-size:11px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="removeFallbackRow(this)" title="Remove">✕</button>
+    </div>
+  `;
+  container.appendChild(row);
+  updateFallbackLabels();
+}
+
+function removeFallbackRow(btn) {
+  btn.closest('.fallback-row').remove();
+  updateFallbackLabels();
+}
+
+function moveFallbackRow(btn, dir) {
+  const row = btn.closest('.fallback-row');
+  const sibling = dir === -1 ? row.previousElementSibling : row.nextElementSibling;
+  if (sibling && sibling.classList.contains('fallback-row')) {
+    const parent = row.parentNode;
+    if (dir === -1) {
+      parent.insertBefore(row, sibling);
+    } else {
+      parent.insertBefore(sibling, row);
+    }
+    updateFallbackLabels();
+  }
+}
+
+function updateFallbackLabels() {
+  const container = document.getElementById('fallbackListContainer');
+  const rows = container.querySelectorAll('.fallback-row');
+  rows.forEach((row, i) => {
+    row.querySelector('span').textContent = `#${i+1}`;
+  });
+}
+
+function saveCustomModelEdits() {
+  const nameInput = document.getElementById('customModelNameInput');
+  const name = nameInput.value.trim();
+  if (!name) {
+    alert('Please enter a custom model name.');
+    nameInput.focus();
+    return;
+  }
+  
+  const container = document.getElementById('fallbackListContainer');
+  const inputs = container.querySelectorAll('.fallback-input');
+  const models = Array.from(inputs).map(inp => inp.value.trim()).filter(Boolean);
+  
+  if (models.length === 0) {
+    alert('Please specify at least one backing model.');
+    return;
+  }
+  
+  const existingIdx = _customModels.findIndex(cm => cm.name === name);
+  if (existingIdx >= 0 && existingIdx !== _editingModelIndex) {
+    alert(`A custom model named "${name}" already exists.`);
+    nameInput.focus();
+    return;
+  }
+  
+  const newModel = { name, models };
+  if (_editingModelIndex === null) {
+    _customModels.push(newModel);
+  } else {
+    _customModels[_editingModelIndex] = newModel;
+  }
+  
+  renderCustomModels();
+  closeEditModel();
 }
 </script>
 </body>

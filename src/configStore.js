@@ -31,6 +31,7 @@ const DEFAULTS = {
   httpsCertPath:     '',
   httpsKeyPath:      '',
   healthCheckExclude: '',
+  customModels:      [],
 };
 
 function generateToken() {
@@ -145,6 +146,16 @@ function load() {
 
   cfg.disabledModels = Array.isArray(cfg.disabledModels) ? cfg.disabledModels.map(String) : [];
 
+  cfg.customModels = Array.isArray(cfg.customModels)
+    ? cfg.customModels.map(cm => {
+        if (!cm || typeof cm !== 'object' || !cm.name) return null;
+        return {
+          name: String(cm.name).trim(),
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 10) : []
+        };
+      }).filter(Boolean)
+    : [];
+
   // Seed / generate dashboard credentials
   if (!cfg.dashboardUsername) {
     cfg.dashboardUsername = process.env.DASHBOARD_USERNAME || 'admin';
@@ -197,6 +208,15 @@ function save(config) {
   merged.httpsCertPath = String(merged.httpsCertPath || '').trim();
   merged.httpsKeyPath  = String(merged.httpsKeyPath  || '').trim();
   merged.disabledModels = Array.isArray(merged.disabledModels) ? merged.disabledModels.map(String) : (existing.disabledModels || []);
+  merged.customModels = Array.isArray(config.customModels)
+    ? config.customModels.map(cm => {
+        if (!cm || typeof cm !== 'object' || !cm.name) return null;
+        return {
+          name: String(cm.name).trim(),
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 10) : []
+        };
+      }).filter(Boolean)
+    : (existing.customModels || []);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
   return merged;
 }
