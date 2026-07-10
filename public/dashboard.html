@@ -1126,25 +1126,19 @@
       <div id="modelTabDateBanner" style="display:none;font-size:11px;color:var(--accent);padding:4px 0 10px;margin-top:-4px">
         📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
       </div>
-      <div class="log-wrap" style="max-height:500px">
-        <table>
-          <thead>
-            <tr>
-              <th style="width:46px;text-align:center">Enable</th>
-              <th onclick="sortModelTab('name')" style="cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></th>
-              <th onclick="sortModelTab('requestCount')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('totalTokens')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Total Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('avgLatency')" style="text-align:right;padding-right:16px;cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('lastStatus')" style="text-align:center;cursor:pointer;user-select:none">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></th>
-              <th onclick="sortModelTab('supporting')" style="text-align:center;cursor:pointer;user-select:none">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></th>
-              <th style="text-align:center">Alive</th>
-              <th style="text-align:center">Analytics</th>
-            </tr>
-          </thead>
-          <tbody id="modelTabBody">
-            <tr><td colspan="9" class="empty-row">No models available. Load some in settings or send request traffic.</td></tr>
-          </tbody>
-        </table>
+      <!-- Header row -->
+      <div style="display:grid;grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px;align-items:center;gap:12px;padding:6px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:0">
+        <div style="width:8px"></div>
+        <div onclick="sortModelTab('name')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></div>
+        <div onclick="sortModelTab('requestCount')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('totalTokens')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('avgLatency')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('lastStatus')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('supporting')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">View</div>
+      </div>
+      <div id="modelTabBody" style="max-height:460px;overflow-y:auto;display:flex;flex-direction:column">
+        <div class="empty-row" style="padding:24px;text-align:center">No models available. Load some in settings or send request traffic.</div>
       </div>
     </div>
   </div>
@@ -2196,59 +2190,66 @@ function renderModelsTab() {
   });
 
   if (filteredRows.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="empty-row">No models found matching filters.</td></tr>';
+    tbody.innerHTML = '<div class="empty-row" style="padding:24px;text-align:center">No models found matching filters.</div>';
     return;
   }
 
+  const MAX_LAT_MS = 10_000;
+
   tbody.innerHTML = filteredRows.map(row => {
-    const sc = !row.lastStatus ? '' : row.lastStatus < 300 ? 's2' : row.lastStatus < 500 ? 's4' : 's5';
-    const scText = !row.lastStatus ? '—' : row.lastStatus;
-    const rtText = row.avgLatency > 0 ? `${row.avgLatency}ms` : '—';
-
-
-    const isChecked = !_disabledModels.includes(row.name);
-    const checkboxHtml = `<input type="checkbox" value="${escHtml(row.name)}" ${isChecked ? 'checked' : ''} onchange="toggleModelTabCheckbox(this)" style="cursor:pointer;" />`;
-
     const aliveStatus = _modelsTabAliveState[row.name];
-    let aliveText = '';
-    let btnText = 'Check';
-    if (aliveStatus === 'alive') {
-      aliveText = '<span class="status-alive" style="margin-left: 6px;">Alive</span>';
-    } else if (aliveStatus === 'dead') {
-      aliveText = '<span class="status-dead" style="margin-left: 6px;">Dead</span>';
-    } else if (aliveStatus === 'checking') {
-      aliveText = '<span style="color:var(--text-muted); margin-left: 6px;">Testing...</span>';
-      btnText = '…';
-    }
-    const safeModelName = escHtml(row.name).replace(/'/g, "\\'");
-    const aliveColumn = `
-      <div style="display: flex; align-items: center; justify-content: center; gap: 4px;">
-        <button class="models-btn" style="padding: 2px 6px; font-size: 10px; margin-left: 0;" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)">${btnText}</button>
-        ${aliveText}
-      </div>
-    `;
+    // Status dot class: map alive state + last HTTP status
+    let dotCls = 'unknown';
+    if      (aliveStatus === 'alive')    dotCls = 'alive';
+    else if (aliveStatus === 'dead')     dotCls = 'dead';
+    else if (aliveStatus === 'checking') dotCls = 'slow';
+    else if (row.lastStatus) dotCls = row.lastStatus < 300 ? 'alive' : row.lastStatus < 500 ? 'slow' : 'dead';
 
-    const tokenText = row.totalTokens > 0 ? formatTokenCount(row.totalTokens) : '—';
-    const provCount = row.supporting.length;
-    const totalP    = _poolKeys ? _poolKeys.filter(k => k.enabled !== false).length : 0;
-    const provBtnColor = provCount === 0 ? 'var(--text-dim)' : provCount === totalP ? 'var(--green)' : 'var(--accent)';
-    const provBtnLabel = provCount === 0 ? `0 / ${totalP}` : `${provCount} / ${totalP}`;
+    const safeModelName = escHtml(row.name).replace(/'/g, "\\'");
+
+    // Latency bar
+    const latMs  = row.avgLatency || 0;
+    const rtText = latMs > 0 ? (latMs >= 1000 ? `${(latMs/1000).toFixed(1)}s` : `${latMs}ms`) : '—';
+    const barPct = latMs > 0 ? Math.min(100, Math.round((latMs / MAX_LAT_MS) * 100)) : 0;
+    const barCls = dotCls === 'unknown' ? 'alive' : dotCls;
+    const latencyCell = `<div class="health-latency-wrap">
+      <div class="health-latency-bar-bg"><div class="health-latency-bar-fill ${barCls}" style="width:${barPct}%"></div></div>
+      <div class="health-latency-val">${rtText}</div>
+    </div>`;
+
+    // Last status badge
+    const scBadgeCls = !row.lastStatus ? 'unknown' : row.lastStatus < 300 ? 'alive' : row.lastStatus < 500 ? 'slow' : 'dead';
+    const scText     = !row.lastStatus ? '—' : String(row.lastStatus);
+    const statusBadge = `<span class="health-status-badge ${scBadgeCls}">${scText}</span>`;
+
+    // Providers button
+    const tokenText  = row.totalTokens > 0 ? formatTokenCount(row.totalTokens) : '—';
+    const provCount  = row.supporting.length;
+    const totalP     = _poolKeys ? _poolKeys.filter(k => k.enabled !== false).length : 0;
+    const provColor  = provCount === 0 ? 'var(--text-dim)' : provCount === totalP ? 'var(--green)' : 'var(--accent)';
+    const provLabel  = `${provCount} / ${totalP}`;
     const safeProviders = JSON.stringify(row.supporting).replace(/"/g, '&quot;');
     const provBtn = `<button onclick="showProviderPopup(this,'${escHtml(row.name)}',${safeProviders})"
-      style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provBtnColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provBtnLabel}</button>`;
+      style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:${provColor};font-size:11px;font-weight:600;padding:2px 9px;cursor:pointer;font-family:var(--font-mono)">${provLabel}</button>`;
+
+    // Analytics button
     const analyticsBtn = `<button onclick="openModelAnalytics('${safeModelName}')"
       style="background:rgba(139,92,246,.1);border:1px solid rgba(139,92,246,.3);border-radius:5px;color:var(--purple);font-size:10px;font-weight:600;padding:2px 8px;cursor:pointer;white-space:nowrap">📊 View</button>`;
-    return `<tr data-model="${escHtml(row.name)}">
-      <td style="text-align:center">${checkboxHtml}</td>
-      <td style="font-family:var(--font-mono);color:var(--text);font-weight:500">${escHtml(row.name)}</td>
-      <td style="text-align:right;padding-right:16px">${row.requestCount || '—'}</td>
-      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'}">${tokenText}</td>
-      <td style="text-align:right;padding-right:16px;font-weight:500;color:${row.avgLatency > 0 ? 'var(--purple)' : 'var(--text-muted)'}">${rtText}</td>
-      <td style="text-align:center" class="${sc}">${scText}</td>
-      <td style="text-align:center">${provBtn}</td>
-      <td style="text-align:center">${aliveColumn}</td>
-      <td style="text-align:center">${analyticsBtn}</td>
-    </tr>`;
+
+    // Check dot — clicking triggers an alive check
+    const dotTitle = aliveStatus === 'checking' ? 'Checking…' : aliveStatus ? aliveStatus : 'Click to check';
+    const dotHtml  = `<div class="health-status-dot ${dotCls}" title="${dotTitle}" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)" style="cursor:pointer;flex-shrink:0"></div>`;
+
+    return `<div class="health-model-row" data-model="${escHtml(row.name)}" style="grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px">
+      ${dotHtml}
+      <div class="health-model-name" title="${escHtml(row.name)}">${escHtml(row.name)}</div>
+      <div style="font-size:12px;color:var(--text-muted);text-align:right;font-family:var(--font-mono)">${row.requestCount || '—'}</div>
+      <div style="font-size:12px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'};text-align:right;font-family:var(--font-mono)">${tokenText}</div>
+      ${latencyCell}
+      <div style="text-align:center">${statusBadge}</div>
+      <div style="text-align:center">${provBtn}</div>
+      <div style="text-align:center">${analyticsBtn}</div>
+    </div>`;
   }).join('');
   updateModelStatusSummary();
 }
