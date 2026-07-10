@@ -1127,12 +1127,13 @@
         📅 Showing data for selected date range — <a href="#" onclick="modelTabClearDates();return false;" style="color:var(--accent);text-decoration:underline">clear filter</a>
       </div>
       <!-- Header row -->
-      <div style="display:grid;grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px;align-items:center;gap:12px;padding:6px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:0">
+      <div style="display:grid;grid-template-columns:20px 1fr 80px 100px 120px 90px 110px 90px 70px;align-items:center;gap:12px;padding:6px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:0">
         <div style="width:8px"></div>
         <div onclick="sortModelTab('name')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Model Name <span id="sort-name">↑</span></div>
         <div onclick="sortModelTab('requestCount')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Requests <span id="sort-requestCount" style="opacity:.4">⇅</span></div>
         <div onclick="sortModelTab('totalTokens')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:right">Tokens <span id="sort-totalTokens" style="opacity:.4">⇅</span></div>
         <div onclick="sortModelTab('avgLatency')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none">Avg Latency <span id="sort-avgLatency" style="opacity:.4">⇅</span></div>
+        <div onclick="sortModelTab('uptime')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Uptime <span id="sort-uptime" style="opacity:.4">⇅</span></div>
         <div onclick="sortModelTab('lastStatus')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Last Status <span id="sort-lastStatus" style="opacity:.4">⇅</span></div>
         <div onclick="sortModelTab('supporting')" style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);cursor:pointer;user-select:none;text-align:center">Providers <span id="sort-supporting" style="opacity:.4">⇅</span></div>
         <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">View</div>
@@ -2113,6 +2114,7 @@ function renderModelsTab() {
       overallSuccessCount += stats.successCount;
     }
 
+    const uptime = stats.requestCount > 0 ? Math.round((stats.successCount / stats.requestCount) * 100) : null;
     const srvM = _serverTokenStats?.models?.[m];
     modelRowsData.push({
       name: m,
@@ -2120,7 +2122,8 @@ function renderModelsTab() {
       requestCount: srvM ? srvM.totalRequests : stats.requestCount,
       totalTokens:  srvM ? srvM.totalTokens  : stats.totalTokens,
       avgLatency: avgLatency,
-      lastStatus: stats.lastStatus
+      lastStatus: stats.lastStatus,
+      uptime: uptime
     });
   });
 
@@ -2171,13 +2174,18 @@ function renderModelsTab() {
       case 'requestCount': return dir * (a.requestCount - b.requestCount);
       case 'totalTokens': return dir * (a.totalTokens - b.totalTokens);
       case 'avgLatency': return dir * (a.avgLatency - b.avgLatency);
+      case 'uptime': {
+        const valA = a.uptime !== null ? a.uptime : -1;
+        const valB = b.uptime !== null ? b.uptime : -1;
+        return dir * (valA - valB);
+      }
       case 'lastStatus': return dir * ((a.lastStatus || 0) - (b.lastStatus || 0));
       default: return 0;
     }
   });
 
   // Update sort indicators in header
-  ['name','supporting','requestCount','totalTokens','avgLatency','lastStatus'].forEach(col => {
+  ['name','supporting','requestCount','totalTokens','avgLatency','uptime','lastStatus'].forEach(col => {
     const el = document.getElementById('sort-' + col);
     if (!el) return;
     if (_modelTabSort.col === col) {
@@ -2240,12 +2248,25 @@ function renderModelsTab() {
     const dotTitle = aliveStatus === 'checking' ? 'Checking…' : aliveStatus ? aliveStatus : 'Click to check';
     const dotHtml  = `<div class="health-status-dot ${dotCls}" title="${dotTitle}" onclick="modelsTabCheckModelAliveFromTable('${safeModelName}', this)" style="cursor:pointer;flex-shrink:0"></div>`;
 
-    return `<div class="health-model-row" data-model="${escHtml(row.name)}" style="grid-template-columns:20px 1fr 80px 100px 130px 110px 90px 70px">
+    // Uptime percentage cell
+    let uptimeCell = '';
+    if (row.uptime === null) {
+      uptimeCell = `<div style="text-align:center;font-size:12px;color:var(--text-dim)">—</div>`;
+    } else {
+      let color = 'var(--red)';
+      if (row.uptime >= 90) color = 'var(--green)';
+      else if (row.uptime >= 75) color = 'var(--yellow)';
+      
+      uptimeCell = `<div style="text-align:center;font-size:12px;font-weight:600;color:${color}">${row.uptime}%</div>`;
+    }
+
+    return `<div class="health-model-row" data-model="${escHtml(row.name)}" style="grid-template-columns:20px 1fr 80px 100px 120px 90px 110px 90px 70px">
       ${dotHtml}
       <div class="health-model-name" title="${escHtml(row.name)}">${escHtml(row.name)}</div>
       <div style="font-size:12px;color:var(--text-muted);text-align:right;font-family:var(--font-mono)">${row.requestCount || '—'}</div>
       <div style="font-size:12px;font-weight:500;color:${row.totalTokens > 0 ? 'var(--yellow)' : 'var(--text-muted)'};text-align:right;font-family:var(--font-mono)">${tokenText}</div>
       ${latencyCell}
+      ${uptimeCell}
       <div style="text-align:center">${statusBadge}</div>
       <div style="text-align:center">${provBtn}</div>
       <div style="text-align:center">${analyticsBtn}</div>
