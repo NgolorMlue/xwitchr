@@ -307,10 +307,12 @@ app.get('/config/full', (req, res) => {
   });
 });
 
+// NOTE: proxy token fields (proxyAuthToken, anthropicProxyToken, googleProxyToken) are intentionally
+// excluded here — they are only modified via the dedicated /config/regenerate-token endpoint.
+// Including them here would let a stale empty-string value from the settings form wipe the token.
 const CONFIG_ALLOWED_KEYS = new Set([
   'rotationThreshold', 'maxPerMinute', 'keyInjectMode',
-  'keyInjectParam', 'keyInjectHeader', 'providers', 'proxyAuthToken',
-  'anthropicProxyToken', 'googleProxyToken', 'apiModes', 'rotationIntervalMin',
+  'keyInjectParam', 'keyInjectHeader', 'providers', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
   'healthCheckExclude', 'disabledModels',

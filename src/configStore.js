@@ -186,9 +186,9 @@ function save(config) {
   merged.rotationIntervalMin = parseInt(merged.rotationIntervalMin, 10) >= 0 ? parseInt(merged.rotationIntervalMin, 10) : 60;
   merged.rotationMode      = ['time', 'round-robin', 'threshold', 'random'].includes(merged.rotationMode) ? merged.rotationMode : 'time';
   merged.roundRobinSwitchLimit = parseInt(merged.roundRobinSwitchLimit, 10) >= 1 ? parseInt(merged.roundRobinSwitchLimit, 10) : 1;
-  if (!merged.proxyAuthToken)      merged.proxyAuthToken     = generateToken();
-  if (!merged.anthropicProxyToken) merged.anthropicProxyToken = generateToken();
-  if (!merged.googleProxyToken)    merged.googleProxyToken    = generateToken();
+  if (!merged.proxyAuthToken)      merged.proxyAuthToken     = existing.proxyAuthToken     || generateToken();
+  if (!merged.anthropicProxyToken) merged.anthropicProxyToken = existing.anthropicProxyToken || generateToken();
+  if (!merged.googleProxyToken)    merged.googleProxyToken    = existing.googleProxyToken    || generateToken();
   if (!merged.apiModes || typeof merged.apiModes !== 'object') merged.apiModes = DEFAULTS.apiModes;
   merged.apiModes.openai = true; // OpenAI mode always on
   const parsedPort = parseInt(merged.port, 10);
