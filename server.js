@@ -702,6 +702,18 @@ app.get('/health/models', (req, res) => {
   res.json(healthChecker.getResults());
 });
 
+// ── GET /health/models/stats ──────────────────────────────────────────────
+// Returns the full health check history for a specific model & provider URL.
+app.get('/health/models/stats', (req, res) => {
+  const { model, url } = req.query;
+  if (!model || !url) {
+    return res.status(400).json({ ok: false, error: 'Missing model or url query parameter' });
+  }
+
+  const history = healthChecker.history.filter(h => h.model === model && h.providerUrl === url);
+  res.json({ ok: true, history });
+});
+
 // ── POST /health/models/check ──────────────────────────────────────────────
 // Triggers an immediate health check (non-blocking — runs async in background).
 app.post('/health/models/check', (req, res) => {

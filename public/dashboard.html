@@ -373,7 +373,7 @@
     .health-type-anthropic{background:rgba(168,85,247,.12);color:var(--purple)}
     .health-type-google{background:rgba(52,211,153,.12);color:#34d399}
     .health-model-list{display:flex;flex-direction:column}
-    .health-model-row{display:grid;grid-template-columns:20px 100px 1fr 120px 100px 120px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
+    .health-model-row{display:grid;grid-template-columns:20px 90px 1fr 70px 120px 100px 100px 90px 70px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
     .health-model-row:last-child{border-bottom:none}
     .health-model-row:hover{background:var(--surface2)}
     .health-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -396,7 +396,25 @@
     .health-latency-val{font-family:var(--font-mono);font-size:10px;color:var(--text-muted)}
     .health-error-tip{font-size:10px;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--font-mono)}
     .health-age{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap}
-    @media(max-width:680px){.health-model-row{grid-template-columns:14px 90px 1fr 90px;}.health-model-row > :nth-child(5),.health-model-row > :nth-child(6){display:none}}
+    .health-timeline{display:flex;gap:3px;align-items:center}
+    .health-tick{width:4px;height:18px;border-radius:1px;background:var(--border);transition:transform .1s}
+    .health-tick:hover{transform:scaleY(1.25)}
+    .health-tick.alive{background:var(--green)}
+    .health-tick.slow{background:var(--yellow)}
+    .health-tick.dead{background:var(--red)}
+    .health-tick.unknown{background:var(--text-dim)}
+    @media(max-width:1050px){
+      .health-header-row{display:none !important}
+      .health-model-row{grid-template-columns:20px 90px 1fr 100px 90px}
+      .health-model-row > :nth-child(4), /* Uptime */
+      .health-model-row > :nth-child(5), /* Timeline */
+      .health-model-row > :nth-child(7), /* Latency */
+      .health-model-row > :nth-child(9)  /* Stats */ {display:none}
+    }
+    @media(max-width:680px){
+      .health-model-row{grid-template-columns:14px 70px 1fr 80px}
+      .health-model-row > :nth-child(2) /* Exclude */ {display:none}
+    }
 
     /* ── Fullscreen Request Log & Advanced Filters ── */
     .card.fullscreen {
@@ -5545,6 +5563,18 @@ function renderHealthTab(data) {
           <span>${escHtml(keysLabel)} · ${(prov.models||[]).length} model${(prov.models||[]).length !== 1 ? 's' : ''}</span>
         </div>
       </div>
+      <!-- Column headers for wide viewports -->
+      <div class="health-header-row" style="display:grid;grid-template-columns:20px 90px 1fr 70px 120px 100px 100px 90px 70px;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface3);margin-bottom:0">
+        <div style="width:8px"></div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Exclude</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Model Name</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Uptime</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">History (30d)</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Status</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Latency</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Age</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Actions</div>
+      </div>
       <div class="health-model-list" id="hml-${escHtml(prov.domain)}"></div>
     `;
     container.appendChild(card);
@@ -5571,6 +5601,39 @@ function renderHealthTab(data) {
         <span>Exclude</span>
       </label>`;
 
+      // Uptime percentage cell
+      let uptimeText = '—';
+      let uptimeColor = 'var(--text-dim)';
+      if (m.uptimePct !== null && m.uptimePct !== undefined) {
+        uptimeText = `${m.uptimePct}%`;
+        if (m.uptimePct >= 90) uptimeColor = 'var(--green)';
+        else if (m.uptimePct >= 75) uptimeColor = 'var(--yellow)';
+        else uptimeColor = 'var(--red)';
+      }
+      const uptimeCell = `<div style="text-align:center;font-size:12px;font-weight:600;color:${uptimeColor}">${uptimeText}</div>`;
+
+      // Visual timeline ticks (last 20 checks)
+      const ticks = (m.history || []).slice(-20);
+      while (ticks.length < 20) {
+        ticks.unshift({ status: 'unknown', timestamp: null });
+      }
+      const timelineHtml = `<div class="health-timeline">
+        ${ticks.map(t => {
+          let titleStr = 'No data';
+          if (t.timestamp) {
+            const timeStr = new Date(t.timestamp).toLocaleString();
+            titleStr = `Status: ${t.status}\nTime: ${timeStr}${t.latencyMs ? `\nLatency: ${t.latencyMs}ms` : ''}`;
+          }
+          return `<div class="health-tick ${t.status}" title="${escHtml(titleStr)}"></div>`;
+        }).join('')}
+      </div>`;
+
+      // Stats popup trigger
+      const safeModelName = escHtml(m.model).replace(/'/g, "\\'");
+      const safeUrl = escHtml(prov.url).replace(/'/g, "\\'");
+      const statsBtn = `<button onclick="openHealthAnalytics('${safeModelName}', '${safeUrl}')"
+        style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:var(--accent);font-size:10px;font-weight:600;padding:4px 8px;cursor:pointer;white-space:nowrap">📊 Stats</button>`;
+
       const row = document.createElement('div');
       row.className = 'health-model-row';
       if (isExcluded) row.style.opacity = '0.6';
@@ -5584,7 +5647,9 @@ function renderHealthTab(data) {
           <div class="health-model-name" title="${escHtml(m.model)}">${escHtml(m.model)}</div>
           ${errTip}
         </div>
-        <div>
+        ${uptimeCell}
+        ${timelineHtml}
+        <div style="text-align:center">
           <span class="health-status-badge ${st}">${isExcluded ? '🚫 Excluded' : (st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown')}</span>
         </div>
         <div class="health-latency-wrap">
@@ -5592,6 +5657,7 @@ function renderHealthTab(data) {
           <div class="health-latency-val">${latLabel}</div>
         </div>
         <div class="health-age">${ageStr}</div>
+        <div style="text-align:center">${statsBtn}</div>
       `;
       modelList.appendChild(row);
     }
@@ -5810,6 +5876,276 @@ async function toggleModelExclusion(modelName, exclude) {
   await persistConfigForModelActions();
   // Fetch fresh health data to reflect the changes (since exclusions change check statuses)
   await fetchHealthData();
+}
+
+// ── Health Uptime Analytics Modal Logic ──
+async function openHealthAnalytics(model, url) {
+  // Create modal container if not exists
+  let modalOverlay = document.getElementById('healthAnalyticsModal');
+  if (modalOverlay) modalOverlay.remove();
+
+  modalOverlay = document.createElement('div');
+  modalOverlay.id = 'healthAnalyticsModal';
+  modalOverlay.className = 'health-modal-overlay';
+  modalOverlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1100; opacity: 0; transition: opacity 0.2s ease;
+  `;
+
+  // Dynamic CSS injection for modal custom styles
+  const styleId = 'health-modal-styles';
+  if (!document.getElementById(styleId)) {
+    const style = document.createElement('style');
+    style.id = styleId;
+    style.textContent = `
+      .health-modal-content {
+        background: var(--surface); border: 1px solid var(--border);
+        border-radius: var(--radius); width: 90%; max-width: 720px;
+        max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column;
+        transform: scale(0.95); transition: transform 0.2s ease;
+        box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+      }
+      .health-modal-overlay.active { opacity: 1; }
+      .health-modal-overlay.active .health-modal-content { transform: scale(1); }
+      .health-cal-day {
+        border-radius: 4px; border: 1px solid transparent; height: 26px;
+        display: flex; align-items: center; justify-content: center;
+        font-family: var(--font-mono); font-size: 9px; cursor: default;
+      }
+      .health-cal-day.alive { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); color: var(--green); }
+      .health-cal-day.slow { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); color: var(--yellow); }
+      .health-cal-day.dead { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: var(--red); }
+      .health-cal-day.unknown { background: rgba(107,122,153,0.06); border-color: var(--border); color: var(--text-dim); }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    `;
+    document.head.appendChild(style);
+  }
+
+  // Set loading content initially
+  modalOverlay.innerHTML = `
+    <div class="health-modal-content" style="max-width: 400px; padding: 24px; text-align: center; gap: 12px; align-items: center; justify-content: center;">
+      <div style="font-size: 16px; font-weight: 600; color: var(--text)">Loading Analytics…</div>
+      <div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono)">${escHtml(model)}</div>
+      <div style="display:flex; justify-content:center; margin-top:8px;">
+        <div style="width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modalOverlay);
+  
+  // Fade in animation
+  setTimeout(() => modalOverlay.classList.add('active'), 10);
+
+  // Close helper
+  const closeFn = () => {
+    modalOverlay.classList.remove('active');
+    setTimeout(() => modalOverlay.remove(), 200);
+  };
+  window.closeHealthModal = closeFn;
+
+  // Click background to close
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeFn();
+  });
+
+  try {
+    const res = await authFetch(`/health/models/stats?model=${encodeURIComponent(model)}&url=${encodeURIComponent(url)}`);
+    if (res.status === 401) { closeFn(); showLogin(); return; }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to load data');
+
+    const history = data.history || [];
+
+    // Calculate Summary Stats
+    const totalChecks = history.length;
+    const successfulChecks = history.filter(h => h.status === 'alive' || h.status === 'slow').length;
+    const uptimePct = totalChecks > 0 ? Math.round((successfulChecks / totalChecks) * 100) : 0;
+    
+    // Average Latency of non-dead checks
+    const activeChecks = history.filter(h => h.status !== 'dead' && h.latencyMs);
+    const avgLatencyMs = activeChecks.length > 0 ? Math.round(activeChecks.reduce((s, h) => s + h.latencyMs, 0) / activeChecks.length) : 0;
+    const outagesCount = history.filter(h => h.status === 'dead').length;
+
+    let uptimeColor = 'var(--red)';
+    if (uptimePct >= 90) uptimeColor = 'var(--green)';
+    else if (uptimePct >= 75) uptimeColor = 'var(--yellow)';
+
+    let outagesColor = outagesCount > 0 ? 'var(--red)' : 'var(--text-muted)';
+
+    // 1. Calculate Daily Availability Grid (Last 30 Days)
+    const dailyGrid = [];
+    for (let d = 29; d >= 0; d--) {
+      const date = new Date(Date.now() - d * 86400_000);
+      const dayChecks = history.filter(h => {
+        const itemDate = new Date(h.timestamp);
+        return itemDate.getFullYear() === date.getFullYear() &&
+               itemDate.getMonth() === date.getMonth() &&
+               itemDate.getDate() === date.getDate();
+      });
+
+      const dayTotal = dayChecks.length;
+      const dayDead  = dayChecks.filter(h => h.status === 'dead').length;
+      const daySlow  = dayChecks.filter(h => h.status === 'slow').length;
+
+      let cls = 'unknown';
+      let statusLabel = 'No checks recorded';
+      if (dayTotal > 0) {
+        if (dayDead === dayTotal) {
+          cls = 'dead';
+          statusLabel = '100% Outage (All checks failed)';
+        } else if (dayDead > 0) {
+          cls = 'dead';
+          statusLabel = `Degraded (${dayDead} failed, ${daySlow} slow of ${dayTotal} checks)`;
+        } else if (daySlow > 0) {
+          cls = 'slow';
+          statusLabel = `Slow responses (${daySlow} of ${dayTotal} checks)`;
+        } else {
+          cls = 'alive';
+          statusLabel = `100% Up (All ${dayTotal} checks successful)`;
+        }
+      }
+
+      const mDay = date.getDate();
+      const mMonth = date.toLocaleDateString(undefined, { month: 'short' });
+      const tooltip = `${mMonth} ${mDay}: ${statusLabel}`;
+
+      dailyGrid.push(`<div class="health-cal-day ${cls}" title="${escHtml(tooltip)}">${mDay}</div>`);
+    }
+    const dailyHtml = dailyGrid.join('');
+
+    // 2. Calculate Hourly Failure Patterns (0-23 hours)
+    const hourOutages = Array(24).fill(0);
+    history.forEach(h => {
+      if (h.status === 'dead') {
+        const hour = new Date(h.timestamp).getHours();
+        hourOutages[hour]++;
+      }
+    });
+
+    const maxHourOutages = Math.max(1, ...hourOutages);
+    const hourlyBars = [];
+    const hourlyLabels = [];
+    for (let h = 0; h < 24; h++) {
+      const count = hourOutages[h];
+      const pct = Math.max(4, Math.round((count / maxHourOutages) * 100));
+      const barColor = count > 0 ? 'var(--red)' : 'rgba(255, 255, 255, 0.05)';
+      const tooltip = `${count} outage${count !== 1 ? 's' : ''} recorded at ${h}:00 - ${(h+1)%24}:00`;
+
+      hourlyBars.push(`<div title="${escHtml(tooltip)}" style="flex:1;height:${pct}%;background:${barColor};border-radius:2px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--yellow)'" onmouseout="this.style.background='${barColor}'"></div>`);
+      hourlyLabels.push(`<div style="flex:1;font-size:8px;">${h}</div>`);
+    }
+    const hourlyBarsHtml = hourlyBars.join('');
+    const hourlyLabelsHtml = hourlyLabels.join('');
+
+    // 3. Outages / Slowdown Logs list (last 100 events)
+    const issueEvents = history.filter(h => h.status === 'dead' || h.status === 'slow');
+    issueEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    let failureLogsHtml = '';
+    if (issueEvents.length === 0) {
+      failureLogsHtml = `<div style="padding:24px;text-align:center;font-size:11.5px;color:var(--text-dim)">No outages or latency spikes recorded over the last 90 days.</div>`;
+    } else {
+      failureLogsHtml = issueEvents.slice(0, 50).map(f => {
+        const timeStr = new Date(f.timestamp).toLocaleString();
+        const badgeCls = f.status === 'dead' ? 'dead' : 'slow';
+        const badgeText = f.status === 'dead' ? '✕ Dead' : '🐢 Slow';
+        const latText = f.latencyMs ? `${f.latencyMs}ms` : '—';
+        const errText = f.error || (f.status === 'slow' ? 'Slow response threshold exceeded' : 'Outage detected');
+        return `
+          <div style="display:grid;grid-template-columns:120px 70px 70px 1fr;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:11px">
+            <div style="font-family:var(--font-mono);color:var(--text-muted)">${timeStr}</div>
+            <div><span class="health-status-badge ${badgeCls}" style="padding:2px 8px;font-size:8px">${badgeText}</span></div>
+            <div style="font-family:var(--font-mono);color:var(--purple);text-align:right">${latText}</div>
+            <div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(errText)}">${escHtml(errText)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Populate Modal Content
+    modalOverlay.innerHTML = `
+      <div class="health-modal-content">
+        <div class="health-modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface2)">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);font-family:var(--font-mono)">${escHtml(model)}</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px">${escHtml(url)}</div>
+          </div>
+          <button class="icon-btn" onclick="closeHealthModal()" style="font-size:14px;padding:4px 8px">✕</button>
+        </div>
+        <div class="health-modal-body" style="padding:20px;display:flex;flex-direction:column;gap:20px">
+          
+          <!-- Summary Cards -->
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Uptime (90d)</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:${uptimeColor}">${uptimePct}%</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Total Checks</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:var(--text)">${totalChecks}</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Avg Latency</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:var(--purple)">${avgLatencyMs}ms</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Outages</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:${outagesColor}">${outagesCount}</div>
+            </div>
+          </div>
+
+          <!-- Availability grid -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Last 30 Days Availability Calendar</div>
+            <div style="display:grid;grid-template-columns:repeat(10, 1fr);gap:6px">
+              ${dailyHtml}
+            </div>
+          </div>
+
+          <!-- Hourly patterns -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Hourly Failure Pattern</div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:10px">Displays the historical distribution of dead/outage pings by hour of the day.</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:4px;height:55px;align-items:end;background:rgba(255,255,255,.015);border-radius:6px;padding:8px 6px;border:1px solid var(--border)">
+                ${hourlyBarsHtml}
+              </div>
+              <div style="display:flex;gap:4px;text-align:center;font-family:var(--font-mono);color:var(--text-dim)">
+                ${hourlyLabelsHtml}
+              </div>
+            </div>
+          </div>
+
+          <!-- Outage / Alert logs -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Recent Outage & Slowdown Log (Last 50 Events)</div>
+            <div style="border:1px solid var(--border);border-radius:6px;max-height:180px;overflow-y:auto;background:var(--surface2)">
+              <!-- Headers for logs -->
+              <div style="display:grid;grid-template-columns:120px 70px 70px 1fr;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-dim);background:var(--surface3)">
+                <div>Time</div>
+                <div>Status</div>
+                <div style="text-align:right">Latency</div>
+                <div>Error Details</div>
+              </div>
+              ${failureLogsHtml}
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    `;
+
+  } catch (err) {
+    modalOverlay.innerHTML = `
+      <div class="health-modal-content" style="max-width: 400px; padding: 24px; text-align: center; gap: 12px; align-items: center; justify-content: center;">
+        <div style="font-size: 16px; font-weight: 600; color: var(--red)">Failed to load stats</div>
+        <div style="font-size: 12px; color: var(--text-muted)">${escHtml(err.message)}</div>
+        <button class="save-btn" onclick="closeHealthModal()" style="margin-top:12px;padding:6px 16px">Close</button>
+      </div>
+    `;
+  }
 }
 </script>
 </body>
