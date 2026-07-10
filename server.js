@@ -292,8 +292,15 @@ app.get('/config', (req, res) => {
 app.get('/config/full', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
   console.log(`[Security] /config/full accessed from ${ip} at ${new Date().toISOString()}`);
-  // Explicitly exclude sensitive fields — never leak password hash or proxy tokens
-  const { dashboardPasswordHash, proxyAuthToken, anthropicProxyToken, googleProxyToken, ...safeCfg } = cfg;
+  
+  // Explicitly exclude sensitive fields — never leak the password hash
+  const { dashboardPasswordHash, ...safeCfg } = cfg;
+  
+  // Include proxy auth tokens so the profile tab can display/copy them
+  safeCfg.proxyAuthToken = cfg.proxyAuthToken || '';
+  safeCfg.anthropicProxyToken = cfg.anthropicProxyToken || '';
+  safeCfg.googleProxyToken = cfg.googleProxyToken || '';
+
   // Mask provider keys: send only last 6 chars hint + full URL (settings table needs it)
   safeCfg.providers = (cfg.providers || []).map(p => ({
     ...p,
