@@ -4615,6 +4615,7 @@ function getProviders(){
     key: (p.key || '').trim(),
     allowedModels: p.allowedModels || [],
     cachedModels: p.cachedModels || [],
+    healthDisabledModels: p.healthDisabledModels || [],
     rpm: p.rpm ? parseInt(p.rpm, 10) || null : null,
     tpm: p.tpm ? parseInt(p.tpm, 10) || null : null,
     enabled: p.enabled !== false,

@@ -14,6 +14,7 @@
  */
 
 const axios = require('axios');
+const crypto = require('crypto');
 const fs    = require('fs');
 const path  = require('path');
 
@@ -68,6 +69,39 @@ class ModelHealthChecker {
     return excludes.some(pattern => mLower.includes(pattern));
   }
 
+  _providerId(provider) {
+    const digest = crypto.createHash('sha256')
+      .update(String(provider.key || ''))
+      .digest('hex')
+      .slice(0, 16);
+    return `${provider.url}::${digest}`;
+  }
+
+  _prepareRequest(url, provider, headers = {}) {
+    const target = new URL(url);
+    const nextHeaders = { ...headers };
+    const type = provider.type || 'openai';
+
+    if (type === 'anthropic') {
+      nextHeaders['x-api-key'] = provider.key;
+      nextHeaders['anthropic-version'] = nextHeaders['anthropic-version'] || '2023-06-01';
+    } else if (type === 'google') {
+      target.searchParams.set('key', provider.key);
+    } else {
+      const cfg = this.getCfg();
+      if (cfg.keyInjectMode === 'query') {
+        target.searchParams.set(cfg.keyInjectParam || 'api_key', provider.key);
+      } else if (cfg.keyInjectMode === 'header') {
+        nextHeaders[cfg.keyInjectHeader || 'X-API-Key'] = provider.key;
+      } else {
+        nextHeaders.Authorization = `Bearer ${provider.key}`;
+      }
+    }
+
+    return { url: target.toString(), headers: nextHeaders };
+  }
+
+
   /**
    * Build a deduplicated URL → { provider, models, keyCount } map from config.
    * Same endpoint = one entry; models from all providers sharing the URL are merged.
@@ -83,9 +117,11 @@ class ModelHealthChecker {
         : (provider.cachedModels || []).map(String).filter(Boolean);
 
       if (!urlMap[url]) {
-        urlMap[url] = { provider, models: new Set(), keyCount: 0 };
+        urlMap[url] = { provider, providers: [], providerModels: new Map(), models: new Set(), keyCount: 0 };
       }
       urlMap[url].keyCount++;
+      urlMap[url].providers.push(provider);
+      urlMap[url].providerModels.set(this._providerId(provider), new Set(models.filter(m => !this._isExcluded(m))));
       for (const m of models) {
         if (!this._isExcluded(m)) {
           urlMap[url].models.add(m);
@@ -142,10 +178,11 @@ class ModelHealthChecker {
     }
   }
 
-  _recordHistory(providerUrl, model, status, latencyMs) {
+  _recordHistory(providerUrl, model, status, latencyMs, providerId = null) {
     const entry = {
       timestamp: new Date().toISOString(),
       providerUrl,
+      providerId,
       model,
       status,
       latencyMs
@@ -170,8 +207,9 @@ class ModelHealthChecker {
     }
   }
 
-  _key(providerUrl, model) {
-    return `${providerUrl}::${model}`;
+  _key(providerOrUrl, model) {
+    if (typeof providerOrUrl === 'string') return `${providerOrUrl}::${model}`;
+    return `${this._providerId(providerOrUrl)}::${model}`;
   }
 
   /** Send a minimal 1-token ping to a single model and return a result object. */
@@ -186,47 +224,45 @@ class ModelHealthChecker {
 
       if (providerType === 'anthropic') {
         // ── Anthropic native ──────────────────────────────────────────────
+        const request = this._prepareRequest(`${cleanUrl}/messages`, provider, { 'content-type': 'application/json' });
         response = await axios.post(
-          `${cleanUrl}/messages`,
+          request.url,
           { model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] },
           {
-            headers: {
-              'x-api-key':         provider.key,
-              'anthropic-version': '2023-06-01',
-              'content-type':      'application/json',
-            },
-            timeout:        CHECK_TIMEOUT_MS,
+            headers: request.headers,
+            timeout: CHECK_TIMEOUT_MS,
             validateStatus: () => true,
-            httpAgent:      this.ipv4HttpAgent,
-            httpsAgent:     this.ipv4HttpsAgent,
+            httpAgent: this.ipv4HttpAgent,
+            httpsAgent: this.ipv4HttpsAgent,
           }
         );
 
       } else if (providerType === 'google') {
         // ── Google native ─────────────────────────────────────────────────
-        const url = `${cleanUrl}/models/${model}:generateContent?key=${encodeURIComponent(provider.key)}`;
+        const request = this._prepareRequest(`${cleanUrl}/models/${model}:generateContent`, provider, { 'content-type': 'application/json' });
         response = await axios.post(
-          url,
+          request.url,
           {
             contents:         [{ role: 'user', parts: [{ text: 'ping' }] }],
             generationConfig: { maxOutputTokens: 1 },
           },
           {
-            headers:        { 'content-type': 'application/json' },
-            timeout:        CHECK_TIMEOUT_MS,
+            headers: request.headers,
+            timeout: CHECK_TIMEOUT_MS,
             validateStatus: () => true,
-            httpAgent:      this.ipv4HttpAgent,
-            httpsAgent:     this.ipv4HttpsAgent,
+            httpAgent: this.ipv4HttpAgent,
+            httpsAgent: this.ipv4HttpsAgent,
           }
         );
 
       } else if (isEmbedding) {
         // ── OpenAI-compatible embeddings ──────────────────────────────────
+        const request = this._prepareRequest(`${cleanUrl}/embeddings`, provider, { 'content-type': 'application/json' });
         response = await axios.post(
-          `${cleanUrl}/embeddings`,
+          request.url,
           { model, input: 'ping' },
           {
-            headers:        { Authorization: `Bearer ${provider.key}`, 'content-type': 'application/json' },
+            headers: request.headers,
             timeout:        CHECK_TIMEOUT_MS,
             validateStatus: () => true,
             httpAgent:      this.ipv4HttpAgent,
@@ -236,11 +272,12 @@ class ModelHealthChecker {
 
       } else {
         // ── OpenAI-compatible chat ────────────────────────────────────────
+        const request = this._prepareRequest(`${cleanUrl}/chat/completions`, provider, { 'content-type': 'application/json' });
         response = await axios.post(
-          `${cleanUrl}/chat/completions`,
+          request.url,
           { model, messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 },
           {
-            headers:        { Authorization: `Bearer ${provider.key}`, 'content-type': 'application/json' },
+            headers: request.headers,
             timeout:        CHECK_TIMEOUT_MS,
             validateStatus: () => true,
             httpAgent:      this.ipv4HttpAgent,
@@ -296,8 +333,11 @@ class ModelHealthChecker {
     const urlMap = this._buildUrlMap();
 
     const tasks = [];
-    for (const { provider, models } of Object.values(urlMap)) {
-      for (const model of models) tasks.push({ provider, model });
+    for (const { providers, providerModels } of Object.values(urlMap)) {
+      for (const provider of providers) {
+        const models = providerModels.get(this._providerId(provider)) || [];
+        for (const model of models) tasks.push({ provider, model });
+      }
     }
 
     const uniqueUrls = Object.keys(urlMap).length;
@@ -317,10 +357,11 @@ class ModelHealthChecker {
       const batch = tasks.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(async ({ provider, model }) => {
         const result  = await this._checkModel(provider, model);
-        const key     = this._key(provider.url, model);
+        const providerId = this._providerId(provider);
+        const key     = this._key(provider, model);
         const domain  = provider.url.replace(/^https?:\/\//, '').split('/')[0];
-        this.results[key] = { ...result, providerUrl: provider.url, model };
-        this._recordHistory(provider.url, model, result.status, result.latencyMs);
+        this.results[key] = { ...result, providerId, providerUrl: provider.url, model };
+        this._recordHistory(provider.url, model, result.status, result.latencyMs, providerId);
         console.log(`[HealthChecker] ${domain} / ${model} → ${result.status} (${result.latencyMs}ms)`);
       }));
     }
@@ -349,44 +390,51 @@ class ModelHealthChecker {
     const cfg     = JSON.parse(JSON.stringify(this.getCfg()));
     let   changed = false;
 
-    // Determine the status of each tested model
-    // Group results by model
-    const modelResults = {}; // modelName -> { alive: number, dead: number }
-    for (const [key, result] of Object.entries(this.results)) {
-      const { model, status } = result;
-      if (!model || this._isExcluded(model)) continue;
-      if (!modelResults[model]) {
-        modelResults[model] = { alive: 0, dead: 0 };
-      }
-      if (status === 'dead') {
-        modelResults[model].dead++;
-      } else if (status === 'alive' || status === 'slow') {
-        modelResults[model].alive++;
-      }
-    }
-
-    // Load current disabledModels
+    const providerById = new Map(
+      (cfg.providers || []).map(provider => [this._providerId(provider), provider])
+    );
     const currentDisabled = new Set(cfg.disabledModels || []);
     const nextDisabled = new Set(currentDisabled);
 
-    for (const [model, counts] of Object.entries(modelResults)) {
-      const totalChecks = counts.alive + counts.dead;
-      if (totalChecks === 0) continue;
+    // Apply health state to the specific provider/key that was checked.
+    for (const result of Object.values(this.results)) {
+      const { model, status, providerId } = result;
+      if (!model || !providerId || this._isExcluded(model)) continue;
+      const provider = providerById.get(providerId);
+      if (!provider) continue;
 
-      const isDead = counts.dead > 0 && counts.alive === 0;
-      const isAlive = counts.alive > 0;
+      const healthDisabled = new Set(provider.healthDisabledModels || []);
+      const entry = (provider.allowedModels || []).find(e =>
+        (typeof e === 'object' ? e.name : e) === model
+      );
+      const isDead = status === 'dead';
+      const isAlive = status === 'alive' || status === 'slow';
 
-      if (isDead && !nextDisabled.has(model)) {
-        nextDisabled.add(model);
-        changed = true;
-        console.log(`[HealthChecker] ⛔ Globally disabled dead model: ${model}`);
-      } else if (isAlive && nextDisabled.has(model)) {
-        nextDisabled.delete(model);
-        changed = true;
-        console.log(`[HealthChecker] ✅ Globally re-enabled model: ${model}`);
+      if (isDead) {
+        if (!healthDisabled.has(model)) {
+          healthDisabled.add(model);
+          changed = true;
+          console.log(`[HealthChecker] Disabled ${model} on ${provider.url}`);
+        }
+        if (entry && typeof entry === 'object' && entry.enabled !== false) {
+          entry.enabled = false;
+          changed = true;
+        }
+      } else if (isAlive) {
+        if (healthDisabled.delete(model)) {
+          changed = true;
+          console.log(`[HealthChecker] Re-enabled ${model} on ${provider.url}`);
+        }
+        if (entry && typeof entry === 'object' && entry.enabled === false) {
+          delete entry.enabled;
+          changed = true;
+        }
+        // Clear legacy global health state when a current provider is alive.
+        if (nextDisabled.delete(model)) changed = true;
       }
-    }
 
+      provider.healthDisabledModels = Array.from(healthDisabled);
+    }
     if (changed) {
       cfg.disabledModels = Array.from(nextDisabled);
       console.log('[HealthChecker] Updating config with new model health states…');
@@ -428,58 +476,86 @@ class ModelHealthChecker {
    * Groups models by provider, merges in latest cached results.
    */
   getResults() {
-    const cfg    = this.getCfg();
-
-    // Use shared _buildUrlMap() to get deduplicated providers
     const urlMap = this._buildUrlMap();
+    const groups = new Map();
 
-    const providerGroups = Object.entries(urlMap).map(([url, { provider, models, keyCount }]) => {
-      const domain = url.replace(/^https?:\/\//, '').split('/')[0];
-      const modelList = [];
-      for (const model of models) {
-        const key    = this._key(url, model);
-        const cached = this.results[key];
-
-        // Filter history for this specific model and provider URL
-        const modelHistory = this.history.filter(h => h.model === model && h.providerUrl === url);
-        const totalChecks  = modelHistory.length;
-        const upChecks     = modelHistory.filter(h => h.status === 'alive' || h.status === 'slow').length;
-        const uptimePct    = totalChecks > 0 ? Math.round((upChecks / totalChecks) * 100) : null;
-
-        // Last 30 checks for visual status timeline
-        const recentHistory = modelHistory.slice(-30).map(h => ({
-          status:    h.status,
-          timestamp: h.timestamp,
-          latencyMs: h.latencyMs
-        }));
-
-        modelList.push({
-          model,
-          status:      cached?.status      ?? 'unknown',
-          latencyMs:   cached?.latencyMs   ?? null,
-          lastChecked: cached?.lastChecked ?? null,
-          error:       cached?.error       ?? null,
-          uptimePct,
-          history:     recentHistory,
+    for (const [url, group] of Object.entries(urlMap)) {
+      if (!groups.has(url)) {
+        groups.set(url, {
+          url,
+          domain: url.replace(/^https?:\/\//, '').split('/')[0],
+          type: group.provider.type || 'openai',
+          keyCount: 0,
+          models: new Map(),
         });
       }
-      // Sort: dead first, then slow, then alive, then unknown
+
+      const target = groups.get(url);
+      target.keyCount += group.keyCount;
+      for (const [providerId, models] of group.providerModels.entries()) {
+        const provider = group.providers.find(candidate => this._providerId(candidate) === providerId);
+        if (!provider) continue;
+        for (const model of models) {
+          if (!target.models.has(model)) target.models.set(model, []);
+          target.models.get(model).push(provider);
+        }
+      }
+    }
+
+    const providers = Array.from(groups.values()).map(group => {
+      const modelList = Array.from(group.models.entries()).map(([model, providerList]) => {
+        const keyResults = providerList
+          .map(provider => this.results[this._key(provider, model)])
+          .filter(Boolean);
+        const cachedResults = keyResults.length > 0 ? keyResults : (this.results[`${group.url}::${model}`] ? [this.results[`${group.url}::${model}`]] : []);
+        const statuses = cachedResults.map(result => result.status);
+        const status = statuses.includes('alive')
+          ? 'alive'
+          : statuses.includes('slow')
+            ? 'slow'
+            : statuses.length > 0 && statuses.every(value => value === 'dead')
+              ? 'dead'
+              : 'unknown';
+        const latencyValues = cachedResults.map(result => result.latencyMs).filter(Number.isFinite);
+        const deadResult = cachedResults.find(result => result.status === 'dead' && result.error);
+        const modelHistory = this.history.filter(h => h.model === model && h.providerUrl === group.url);
+        const totalChecks = modelHistory.length;
+        const upChecks = modelHistory.filter(h => h.status === 'alive' || h.status === 'slow').length;
+
+        return {
+          model,
+          status,
+          latencyMs: latencyValues.length > 0 ? Math.min(...latencyValues) : null,
+          lastChecked: cachedResults.reduce((latest, result) =>
+            !latest || (result.lastChecked && result.lastChecked > latest) ? result.lastChecked : latest,
+            null
+          ),
+          error: deadResult?.error || null,
+          uptimePct: totalChecks > 0 ? Math.round((upChecks / totalChecks) * 100) : null,
+          history: modelHistory.slice(-30).map(h => ({
+            status: h.status,
+            timestamp: h.timestamp,
+            latencyMs: h.latencyMs,
+          })),
+        };
+      });
+
       const order = { dead: 0, slow: 1, alive: 2, unknown: 3 };
       modelList.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
       return {
-        url,
-        domain,
-        type:     provider.type || 'openai',
-        keyCount, // how many API keys share this endpoint
-        models:   modelList,
+        url: group.url,
+        domain: group.domain,
+        type: group.type,
+        keyCount: group.keyCount,
+        models: modelList,
       };
     });
 
     return {
-      providers:   providerGroups,
+      providers,
       lastChecked: this.lastChecked,
-      nextCheck:   this.nextCheck,
-      running:     this._running,
+      nextCheck: this.nextCheck,
+      running: this._running,
     };
   }
 }

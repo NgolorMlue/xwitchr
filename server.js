@@ -83,6 +83,11 @@ const SKIP_PROXY_HEADERS = new Set(['transfer-encoding','connection','keep-alive
 // Safe git target regex — only allow branch/tag names (alphanumeric, dots, hyphens, slashes, underscores, parentheses)
 const SAFE_GIT_TARGET = /^[a-zA-Z0-9][a-zA-Z0-9._\-\/()]*$/;
 
+function shouldFailoverStatus(status, isCustomModel = false) {
+  return status === 401 || status === 408 || status === 425 || status === 429 ||
+    status >= 500 || (isCustomModel && status === 404);
+}
+
 // ── Shared utility: timing-safe token comparison ──────────────────────────
 function checkTokenEquals(provided, stored) {
   if (!stored || !provided) return false;
@@ -552,13 +557,41 @@ function isConfiguredProvider(url, key) {
   return (cfg.providers || []).some(p => p.url === normalised && p.key === key);
 }
 
+function getConfiguredProvider(url, key) {
+  const normalised = (url || '').trim().replace(/\/$/, '');
+  return (cfg.providers || []).find(p => p.url === normalised && p.key === key) || null;
+}
+
+// Apply the same provider authentication rules used by the runtime proxy.
+function prepareProviderRequest(url, provider, headers = {}) {
+  const target = new URL(url);
+  const nextHeaders = { ...headers };
+  const type = provider?.type || 'openai';
+
+  if (type === 'google' || target.hostname.includes('googleapis.com')) {
+    target.searchParams.set('key', provider.key);
+  } else if (type === 'anthropic') {
+    nextHeaders['x-api-key'] = provider.key;
+    nextHeaders['anthropic-version'] = nextHeaders['anthropic-version'] || '2023-06-01';
+  } else if (cfg.keyInjectMode === 'query') {
+    target.searchParams.set(cfg.keyInjectParam || 'api_key', provider.key);
+  } else if (cfg.keyInjectMode === 'header') {
+    nextHeaders[cfg.keyInjectHeader || 'X-API-Key'] = provider.key;
+  } else {
+    nextHeaders.Authorization = `Bearer ${provider.key}`;
+  }
+
+  return { url: target.toString(), headers: nextHeaders };
+}
+
 // ── POST /provider/models ───────────────────────────────────────────────────────
 // Fetches available models from a provider's /models endpoint.
 // Used by the Settings UI to populate the model checklist.
 app.post('/provider/models', async (req, res) => {
   const { url, key } = req.body || {};
   if (!url || !key) return res.status(400).json({ ok: false, error: 'Missing url or key' });
-  if (!isConfiguredProvider(url, key)) return res.status(403).json({ ok: false, error: 'URL/key not in configured providers' });
+  const provider = getConfiguredProvider(url, key);
+  if (!provider) return res.status(403).json({ ok: false, error: 'URL/key not in configured providers' });
 
   try {
     let modelsUrl = url.replace(/\/$/, '') + '/models';
@@ -567,8 +600,9 @@ app.post('/provider/models', async (req, res) => {
       modelsUrl = modelsUrl.replace(/\/openai\/models$/, '/models');
     }
 
-    let response = await axios.get(modelsUrl, {
-      headers:        { 'Authorization': `Bearer ${key}` },
+    const request = prepareProviderRequest(modelsUrl, provider);
+    let response = await axios.get(request.url, {
+      headers:        request.headers,
       validateStatus: () => true,
       timeout:        15_000,
       httpAgent:      ipv4HttpAgent,
@@ -640,7 +674,8 @@ app.post('/provider/test-model', async (req, res) => {
   if (!url || !key || !model) {
     return res.status(400).json({ ok: false, error: 'Missing url, key, or model' });
   }
-  if (!isConfiguredProvider(url, key)) return res.status(403).json({ ok: false, error: 'URL/key not in configured providers' });
+  const provider = getConfiguredProvider(url, key);
+  if (!provider) return res.status(403).json({ ok: false, error: 'URL/key not in configured providers' });
 
   const cleanUrl = url.replace(/\/$/, '');
   const startTime = Date.now();
@@ -662,11 +697,9 @@ app.post('/provider/test-model', async (req, res) => {
   }
 
   try {
-    const response = await axios.post(targetUrl, data, {
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json'
-      },
+    const request = prepareProviderRequest(targetUrl, provider, { 'Content-Type': 'application/json' });
+    const response = await axios.post(request.url, data, {
+      headers: request.headers,
       timeout: 10000,
       validateStatus: () => true,
       httpAgent: ipv4HttpAgent,
@@ -685,11 +718,9 @@ app.post('/provider/test-model', async (req, res) => {
       };
       
       try {
-        const fallbackRes = await axios.post(fallbackUrl, fallbackData, {
-          headers: {
-            'Authorization': `Bearer ${key}`,
-            'Content-Type': 'application/json'
-          },
+        const fallbackRequest = prepareProviderRequest(fallbackUrl, provider, { 'Content-Type': 'application/json' });
+        const fallbackRes = await axios.post(fallbackRequest.url, fallbackData, {
+          headers: fallbackRequest.headers,
           timeout: 10000,
           validateStatus: () => true,
           httpAgent: ipv4HttpAgent,
@@ -907,7 +938,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
   const excludeSet = new Set();
   const excludeModelsSet = new Set();
   let attempts = 0;
-  const maxAttempts = Math.min(3, cfg.providers.length);
+  const maxAttempts = Math.min(20, cfg.providers.length);
 
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
   const clientUserAgent = req.headers['user-agent'] || 'unknown';
@@ -1107,12 +1138,12 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           }, (proxyRes) => {
             const responseTime = Date.now() - startTime;
 
-            if (proxyRes.statusCode >= 500 && attempts < maxAttempts - 1) {
+            if (shouldFailoverStatus(proxyRes.statusCode, isCustomModel) && attempts < maxAttempts - 1) {
               proxyRes.resume();
               return settle(rejectStream, new Error(`Upstream returned status ${proxyRes.statusCode}`));
             }
 
-            if (proxyRes.statusCode >= 500 || proxyRes.statusCode === 401) {
+            if (shouldFailoverStatus(proxyRes.statusCode, isCustomModel)) {
               pool.recordFailure(provider);
             } else {
               pool.recordSuccess(provider);
@@ -1225,7 +1256,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           });
 
           let streamTimeout = 120_000;
-          if (isCustomModel && !isMultipart && attempts < maxAttempts - 1) {
+          if (isCustomModel && !isMultipart) {
             streamTimeout = cfg.customModelTimeoutMs || 5000;
           }
           proxyReq.setTimeout(streamTimeout, () => proxyReq.destroy(new Error('Upstream request timed out')));
@@ -1241,7 +1272,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       }
 
       let bufferedTimeout = isMultipart ? 120_000 : 30_000;
-      if (isCustomModel && !isMultipart && attempts < maxAttempts - 1) {
+      if (isCustomModel && !isMultipart) {
         bufferedTimeout = cfg.customModelTimeoutMs || 5000;
       }
 
@@ -1257,11 +1288,11 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         httpsAgent:     ipv4HttpsAgent,
       });
 
-      if (upstream.status >= 500 && attempts < maxAttempts - 1) {
+      if (shouldFailoverStatus(upstream.status, isCustomModel) && attempts < maxAttempts - 1) {
         throw new Error(`Upstream returned server error ${upstream.status}`);
       }
 
-      if (upstream.status >= 500 || upstream.status === 401) {
+      if (shouldFailoverStatus(upstream.status, isCustomModel)) {
         pool.recordFailure(provider);
       } else {
         pool.recordSuccess(provider);

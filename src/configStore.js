@@ -86,6 +86,7 @@ function sanitizeProvider(p) {
       ? p.allowedModels.map(sanitizeModelEntry).filter(Boolean)
       : [],
     cachedModels:  Array.isArray(p.cachedModels)  ? p.cachedModels.map(String)  : [],
+    healthDisabledModels: Array.isArray(p.healthDisabledModels) ? p.healthDisabledModels.map(String).filter(Boolean) : [],
     rpm:           isFinite(rpm) && rpm > 0 ? rpm : null,
     tpm:           isFinite(tpm) && tpm > 0 ? tpm : null,
     enabled:       p.enabled !== false,
