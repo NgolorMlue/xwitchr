@@ -183,7 +183,7 @@ class KeyPool {
       if (this._isRateLimited(p, model)) continue;
 
       const count = this._count(p);
-      if (count >= this.threshold) {
+      if (count >= this.threshold && total > 1) {
         this.currentIndexes[pType] = (startIdx + 1) % total;
         this.lastRotationTime = Date.now();
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
