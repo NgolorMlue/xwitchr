@@ -15,7 +15,7 @@ class KeyPool {
     this.maxPerMinute = maxPerMinute;
     this.rotationIntervalMin = rotationIntervalMin;
     this.rotationMode = rotationMode;
-    this.roundRobinSwitchLimit = roundRobinSwitchLimit;
+    this.roundRobinSwitchLimit = parseInt(roundRobinSwitchLimit, 10) || 1;
     this.roundRobinRequestCount = 0;
     this.windows            = {};
     this.tokenWindows       = {};
@@ -136,13 +136,20 @@ class KeyPool {
     const total = this.providers.length;
     if (depth >= total) throw new Error('ALL_KEYS_EXHAUSTED');
 
+    const hasConfigured = this.providers.some(p =>
+      p.enabled !== false &&
+      (!requiredType || (p.type || 'openai') === requiredType) &&
+      this._supportsModel(p, model)
+    );
+    if (!hasConfigured) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
+
     const anyEligible = this.providers.some(p =>
       p.enabled !== false &&
       (!requiredType || (p.type || 'openai') === requiredType) &&
       this._supportsModel(p, model) &&
       (!excludeSet || !excludeSet.has(this._id(p)))
     );
-    if (!anyEligible) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
+    if (!anyEligible) throw new Error('ALL_KEYS_EXHAUSTED');
 
     // Trigger time-based rotation check at the start of selection (top-level invocation only)
     if (depth === 0 && this.rotationMode === 'time' && total > 1) {
