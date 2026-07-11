@@ -22,7 +22,7 @@ class KeyPool {
     this.modelWindows       = {};  // `${provId}::${model}` → [timestamps]
     this.modelTokenWindows  = {};  // `${provId}::${model}` → [{ts,n}]
     this.currentIndexes          = {};
-    this.lastRotationTime        = Date.now();
+    this.lastRotationTimes       = {};
     this.consecutiveFailures     = {};
     this.lastFailureTime         = {};
     this.disabledModels          = Array.isArray(disabledModels) ? disabledModels : [];
@@ -156,18 +156,18 @@ class KeyPool {
     if (this.currentIndexes[pType] === undefined) {
       this.currentIndexes[pType] = 0;
       this.roundRobinCounts[pType] = 0;
+      this.lastRotationTimes[pType] = Date.now();
     }
-    const startIdx = this.currentIndexes[pType];
-
     // Trigger time-based rotation check at the start of selection (top-level invocation only)
     if (depth === 0 && this.rotationMode === 'time' && total > 1) {
-      const elapsed = Date.now() - this.lastRotationTime;
+      const elapsed = Date.now() - (this.lastRotationTimes[pType] || Date.now());
       const intervalMs = this.rotationIntervalMin * 60_000;
       if (elapsed >= intervalMs) {
-        this.currentIndexes[pType] = (startIdx + 1) % total;
-        this.lastRotationTime = Date.now();
+        this.currentIndexes[pType] = ((this.currentIndexes[pType] || 0) + 1) % total;
+        this.lastRotationTimes[pType] = Date.now();
       }
     }
+    const startIdx = this.currentIndexes[pType];
 
     // Pass 1: healthy (not offline) providers
     for (let attempt = 0; attempt < total; attempt++) {
@@ -185,7 +185,7 @@ class KeyPool {
       const count = this._count(p);
       if (count >= this.threshold && total > 1) {
         this.currentIndexes[pType] = (startIdx + 1) % total;
-        this.lastRotationTime = Date.now();
+        this.lastRotationTimes[pType] = Date.now();
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
@@ -193,7 +193,7 @@ class KeyPool {
         // Sticky behavior: stick to this provider, reset timer only on failover transition
         if (idx !== startIdx) {
           this.currentIndexes[pType] = idx;
-          this.lastRotationTime = Date.now();
+          this.lastRotationTimes[pType] = Date.now();
         }
       } else {
         // Round-robin
@@ -230,7 +230,7 @@ class KeyPool {
         if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
           if (idx !== startIdx) {
             this.currentIndexes[pType] = idx;
-            this.lastRotationTime = Date.now();
+            this.lastRotationTimes[pType] = Date.now();
           }
         } else {
           // Round-robin fallback
