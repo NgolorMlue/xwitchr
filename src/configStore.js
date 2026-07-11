@@ -33,6 +33,7 @@ const DEFAULTS = {
   httpsKeyPath:      '',
   healthCheckExclude: '',
   customModels:      [],
+  customModelTimeoutMs: 5000,
 };
 
 function generateToken() {
@@ -158,6 +159,8 @@ function load() {
       }).filter(Boolean)
     : [];
 
+  cfg.customModelTimeoutMs = typeof cfg.customModelTimeoutMs === 'number' && cfg.customModelTimeoutMs > 0 ? cfg.customModelTimeoutMs : 5000;
+
   // Seed / generate dashboard credentials
   if (!cfg.dashboardUsername) {
     cfg.dashboardUsername = process.env.DASHBOARD_USERNAME || 'admin';
@@ -220,6 +223,8 @@ function save(config) {
         };
       }).filter(Boolean)
     : (existing.customModels || []);
+  merged.customModelTimeoutMs = typeof config.customModelTimeoutMs === 'number' && config.customModelTimeoutMs > 0 ? config.customModelTimeoutMs : 5000;
+
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
   return merged;
 }

@@ -333,7 +333,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'keyInjectParam', 'keyInjectHeader', 'providers', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude', 'disabledModels', 'customModels', 'healthCheckInterval',
+  'healthCheckExclude', 'disabledModels', 'customModels', 'healthCheckInterval', 'customModelTimeoutMs',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -905,6 +905,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
   const startTime = Date.now();
   const excludeSet = new Set();
+  const excludeModelsSet = new Set();
   let attempts = 0;
   const maxAttempts = Math.min(3, cfg.providers.length);
 
@@ -977,17 +978,20 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
   while (attempts < maxAttempts) {
     let provider = null;
     let keyHint = '?';
+    let resolvedModel = requestedModel;
+    let isCustomModel = false;
     try {
       const wantsStream  = req.body && typeof req.body === 'object' && req.body.stream === true;
       const inputFormat  = req._inputFormat  || 'openai';
       const requiredType = req._requiredType || null;
 
-      let resolvedModel = requestedModel;
       const customModel = pool.customModels?.find(cm => cm.name === requestedModel);
+      isCustomModel = !!customModel;
       if (customModel) {
         let found = false;
         let lastErr = null;
         for (const backingModel of customModel.models) {
+          if (excludeModelsSet.has(backingModel)) continue;
           try {
             provider = pool.getProvider(backingModel, excludeSet, 0, requiredType);
             resolvedModel = backingModel;
@@ -1220,7 +1224,11 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
             }
           });
 
-          proxyReq.setTimeout(120_000, () => proxyReq.destroy(new Error('Upstream request timed out')));
+          let streamTimeout = 120_000;
+          if (isCustomModel && !isMultipart && attempts < maxAttempts - 1) {
+            streamTimeout = cfg.customModelTimeoutMs || 5000;
+          }
+          proxyReq.setTimeout(streamTimeout, () => proxyReq.destroy(new Error('Upstream request timed out')));
           proxyReq.on('error', (err) => { settle(rejectStream, err); });
           if (isMultipart && rawMultipartBody) {
             proxyReq.write(rawMultipartBody);
@@ -1232,7 +1240,11 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         return;
       }
 
-      // ── Buffered path ──────────────────────────────────────────────────────
+      let bufferedTimeout = isMultipart ? 120_000 : 30_000;
+      if (isCustomModel && !isMultipart && attempts < maxAttempts - 1) {
+        bufferedTimeout = cfg.customModelTimeoutMs || 5000;
+      }
+
       const upstream = await axios({
         method:         req.method,
         url:            urlObj.toString(),
@@ -1240,7 +1252,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         data:           !isBodyMethod ? undefined : (isMultipart ? rawMultipartBody : bodyStr),
         validateStatus: () => true,
         responseType:   'arraybuffer',
-        timeout:        isMultipart ? 120_000 : 30_000,
+        timeout:        bufferedTimeout,
         httpAgent:      ipv4HttpAgent,
         httpsAgent:     ipv4HttpsAgent,
       });
@@ -1303,6 +1315,12 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
     } catch (err) {
       attempts++;
       console.warn(`[Proxy Attempt ${attempts} Failed] Provider: ${provider ? provider.url : 'none'}, Error: ${err.message}`);
+
+      const isTimeout = err.code === 'ECONNABORTED' || err.message?.toLowerCase().includes('timeout') || err.message?.toLowerCase().includes('timed out');
+      if (isTimeout && isCustomModel && resolvedModel) {
+        excludeModelsSet.add(resolvedModel);
+        console.log(`[CustomModel] Backing model "${resolvedModel}" timed out. Added to exclusion set for this request.`);
+      }
 
       if (provider) {
         excludeSet.add(`${provider.url}::${provider.key}`);
