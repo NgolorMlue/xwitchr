@@ -16,12 +16,12 @@ class KeyPool {
     this.rotationIntervalMin = rotationIntervalMin;
     this.rotationMode = rotationMode;
     this.roundRobinSwitchLimit = parseInt(roundRobinSwitchLimit, 10) || 1;
-    this.roundRobinRequestCount = 0;
+    this.roundRobinCounts = {};
     this.windows            = {};
     this.tokenWindows       = {};
     this.modelWindows       = {};  // `${provId}::${model}` → [timestamps]
     this.modelTokenWindows  = {};  // `${provId}::${model}` → [{ts,n}]
-    this.currentIndex            = 0;
+    this.currentIndexes          = {};
     this.lastRotationTime        = Date.now();
     this.consecutiveFailures     = {};
     this.lastFailureTime         = {};
@@ -151,19 +151,27 @@ class KeyPool {
     );
     if (!anyEligible) throw new Error('ALL_KEYS_EXHAUSTED');
 
+    // Resolve target provider type (e.g. google, openai, anthropic) for independent rotation
+    const pType = requiredType || (model ? (this.providers.find(p => p.enabled !== false && (!requiredType || (p.type || 'openai') === requiredType) && this._supportsModel(p, model))?.type || 'openai') : 'openai');
+    if (this.currentIndexes[pType] === undefined) {
+      this.currentIndexes[pType] = 0;
+      this.roundRobinCounts[pType] = 0;
+    }
+    const startIdx = this.currentIndexes[pType];
+
     // Trigger time-based rotation check at the start of selection (top-level invocation only)
     if (depth === 0 && this.rotationMode === 'time' && total > 1) {
       const elapsed = Date.now() - this.lastRotationTime;
       const intervalMs = this.rotationIntervalMin * 60_000;
       if (elapsed >= intervalMs) {
-        this.currentIndex = (this.currentIndex + 1) % total;
+        this.currentIndexes[pType] = (startIdx + 1) % total;
         this.lastRotationTime = Date.now();
       }
     }
 
     // Pass 1: healthy (not offline) providers
     for (let attempt = 0; attempt < total; attempt++) {
-      const idx = (this.currentIndex + attempt) % total;
+      const idx = (startIdx + attempt) % total;
       const p   = this.providers[idx];
       const id  = this._id(p);
 
@@ -176,33 +184,33 @@ class KeyPool {
 
       const count = this._count(p);
       if (count >= this.threshold) {
-        this.currentIndex = (this.currentIndex + 1) % total;
+        this.currentIndexes[pType] = (startIdx + 1) % total;
         this.lastRotationTime = Date.now();
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
       if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
         // Sticky behavior: stick to this provider, reset timer only on failover transition
-        if (idx !== this.currentIndex) {
-          this.currentIndex = idx;
+        if (idx !== startIdx) {
+          this.currentIndexes[pType] = idx;
           this.lastRotationTime = Date.now();
         }
       } else {
         // Round-robin
-        if (idx !== this.currentIndex) {
-          this.currentIndex = idx;
-          this.roundRobinRequestCount = 1;
+        if (idx !== startIdx) {
+          this.currentIndexes[pType] = idx;
+          this.roundRobinCounts[pType] = 1;
         } else {
-          this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+          this.roundRobinCounts[pType] = (this.roundRobinCounts[pType] || 0) + 1;
         }
 
-        if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+        if (this.roundRobinCounts[pType] >= this.roundRobinSwitchLimit) {
           if (this.rotationMode === 'random') {
-            this.currentIndex = Math.floor(Math.random() * total);
+            this.currentIndexes[pType] = Math.floor(Math.random() * total);
           } else {
-            this.currentIndex = (idx + 1) % total;
+            this.currentIndexes[pType] = (idx + 1) % total;
           }
-          this.roundRobinRequestCount = 0;
+          this.roundRobinCounts[pType] = 0;
         }
       }
       return p;
@@ -210,7 +218,7 @@ class KeyPool {
 
     // Pass 2: include offline providers as fallback
     for (let attempt = 0; attempt < total; attempt++) {
-      const idx = (this.currentIndex + attempt) % total;
+      const idx = (startIdx + attempt) % total;
       const p   = this.providers[idx];
       const id  = this._id(p);
 
@@ -220,26 +228,26 @@ class KeyPool {
       if (!this._supportsModel(p, model)) continue;
       if (!this._isRateLimited(p, model)) {
         if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
-          if (idx !== this.currentIndex) {
-            this.currentIndex = idx;
+          if (idx !== startIdx) {
+            this.currentIndexes[pType] = idx;
             this.lastRotationTime = Date.now();
           }
         } else {
           // Round-robin fallback
-          if (idx !== this.currentIndex) {
-            this.currentIndex = idx;
-            this.roundRobinRequestCount = 1;
+          if (idx !== startIdx) {
+            this.currentIndexes[pType] = idx;
+            this.roundRobinCounts[pType] = 1;
           } else {
-            this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+            this.roundRobinCounts[pType] = (this.roundRobinCounts[pType] || 0) + 1;
           }
 
-          if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+          if (this.roundRobinCounts[pType] >= this.roundRobinSwitchLimit) {
             if (this.rotationMode === 'random') {
-              this.currentIndex = Math.floor(Math.random() * total);
+              this.currentIndexes[pType] = Math.floor(Math.random() * total);
             } else {
-              this.currentIndex = (idx + 1) % total;
+              this.currentIndexes[pType] = (idx + 1) % total;
             }
-            this.roundRobinRequestCount = 0;
+            this.roundRobinCounts[pType] = 0;
           }
         }
         return p;
@@ -308,7 +316,7 @@ class KeyPool {
         rpm:                 p.rpm || null,
         tpm:                 p.tpm || null,
         tokensLastMinute:    tokens,
-        isCurrent:           idx === this.currentIndex,
+        isCurrent:           idx === (this.currentIndexes[p.type || 'openai'] || 0),
         consecutiveFailures: failures,
         enabled:             p.enabled !== false,
         status:
