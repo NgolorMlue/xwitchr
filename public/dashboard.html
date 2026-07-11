@@ -1650,6 +1650,23 @@
         
         <button class="add-row-btn" style="border:1px dashed var(--border2); border-radius:8px; margin-top:12px; padding:12px; background:none; color:var(--text); cursor:pointer; font-weight:500; font-family:'Inter',sans-serif; transition:background .15s, border-color .15s;" onclick="addNewCustomModel()" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">＋ Create Custom Model</button>
       </div>
+
+      <!-- Failover Settings -->
+      <div class="card" style="margin-top: 16px;">
+        <div class="section-header">
+          <div class="section-title">⏱️ Failover Settings</div>
+        </div>
+        <div class="form-hint" style="margin-bottom:12px">
+          Configure latency limit for custom model fallback logic.
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="customModelTimeoutInput">Failover Timeout (seconds)</label>
+          <input class="form-input" id="customModelTimeoutInput" type="number" min="1" max="120" placeholder="5" />
+          <div class="form-hint">
+            If a backing model takes longer than this to respond, the router immediately switches to the next fallback model. (On the last fallback model, the standard 30s/120s timeout applies).
+          </div>
+        </div>
+      </div>
     </div>
     
     <!-- RIGHT: Edit Active Custom Model -->
@@ -4468,6 +4485,10 @@ async function loadConfig(){
     onHttpsToggle();
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
+    const cmTimeoutInput = document.getElementById('customModelTimeoutInput');
+    if (cmTimeoutInput) {
+      cmTimeoutInput.value = Math.round((cfg.customModelTimeoutMs || 5000) / 1000);
+    }
     _disabledModels = cfg.disabledModels || [];
     _customModels = cfg.customModels || [];
     renderCustomModels();
@@ -4594,6 +4615,7 @@ function getProviders(){
     key: (p.key || '').trim(),
     allowedModels: p.allowedModels || [],
     cachedModels: p.cachedModels || [],
+    healthDisabledModels: p.healthDisabledModels || [],
     rpm: p.rpm ? parseInt(p.rpm, 10) || null : null,
     tpm: p.tpm ? parseInt(p.tpm, 10) || null : null,
     enabled: p.enabled !== false,
@@ -5296,6 +5318,7 @@ function buildConfigPayload() {
     healthCheckExclude: document.getElementById('healthCheckExclude')?.value || '',
     healthCheckInterval: parseFloat(document.getElementById('healthCheckInterval')?.value) || 4,
     customModels:  _customModels,
+    customModelTimeoutMs: (parseInt(document.getElementById('customModelTimeoutInput')?.value) || 5) * 1000,
   };
 }
 

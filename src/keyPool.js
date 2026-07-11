@@ -15,14 +15,14 @@ class KeyPool {
     this.maxPerMinute = maxPerMinute;
     this.rotationIntervalMin = rotationIntervalMin;
     this.rotationMode = rotationMode;
-    this.roundRobinSwitchLimit = roundRobinSwitchLimit;
-    this.roundRobinRequestCount = 0;
+    this.roundRobinSwitchLimit = parseInt(roundRobinSwitchLimit, 10) || 1;
+    this.roundRobinCounts = {};
     this.windows            = {};
     this.tokenWindows       = {};
     this.modelWindows       = {};  // `${provId}::${model}` → [timestamps]
     this.modelTokenWindows  = {};  // `${provId}::${model}` → [{ts,n}]
-    this.currentIndex            = 0;
-    this.lastRotationTime        = Date.now();
+    this.currentIndexes          = {};
+    this.lastRotationTimes       = {};
     this.consecutiveFailures     = {};
     this.lastFailureTime         = {};
     this.disabledModels          = Array.isArray(disabledModels) ? disabledModels : [];
@@ -101,6 +101,7 @@ class KeyPool {
   _supportsModel(p, model) {
     if (!model) return true;
     if (this.disabledModels && this.disabledModels.includes(model)) return false;
+    if (Array.isArray(p.healthDisabledModels) && p.healthDisabledModels.includes(model)) return false;
     const allowed = p.allowedModels;
     if (!allowed || allowed.length === 0) return true;
     const entry = allowed.find(e => (typeof e === 'object' ? e.name : e) === model);
@@ -134,29 +135,49 @@ class KeyPool {
 
   getProvider(model = null, excludeSet = null, depth = 0, requiredType = null) {
     const total = this.providers.length;
-    if (depth >= total) throw new Error('ALL_KEYS_EXHAUSTED');
+    const configuredIndexes = this.providers
+      .map((p, idx) => ({ p, idx }))
+      .filter(({ p }) =>
+        p.enabled !== false &&
+        (!requiredType || (p.type || 'openai') === requiredType) &&
+        this._supportsModel(p, model)
+      )
+      .map(({ idx }) => idx);
 
-    const anyEligible = this.providers.some(p =>
-      p.enabled !== false &&
-      (!requiredType || (p.type || 'openai') === requiredType) &&
-      this._supportsModel(p, model) &&
-      (!excludeSet || !excludeSet.has(this._id(p)))
+    if (configuredIndexes.length === 0) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
+    if (depth >= configuredIndexes.length) throw new Error('ALL_KEYS_EXHAUSTED');
+
+    const anyEligible = configuredIndexes.some(idx =>
+      !excludeSet || !excludeSet.has(this._id(this.providers[idx]))
     );
-    if (!anyEligible) throw new Error(`NO_PROVIDER_FOR_MODEL:${model}`);
+    if (!anyEligible) throw new Error('ALL_KEYS_EXHAUSTED');
+
+    // Resolve target provider type (e.g. google, openai, anthropic) for independent rotation
+    const pType = requiredType || (this.providers[configuredIndexes[0]].type || 'openai');
+    const rotationIndexes = configuredIndexes.filter(idx => (this.providers[idx].type || 'openai') === pType);
+    if (this.currentIndexes[pType] === undefined) {
+      this.currentIndexes[pType] = 0;
+      this.roundRobinCounts[pType] = 0;
+      this.lastRotationTimes[pType] = Date.now();
+    }
+    let startPos = rotationIndexes.indexOf(this.currentIndexes[pType]);
+    if (startPos < 0) startPos = 0;
 
     // Trigger time-based rotation check at the start of selection (top-level invocation only)
-    if (depth === 0 && this.rotationMode === 'time' && total > 1) {
-      const elapsed = Date.now() - this.lastRotationTime;
+    if (depth === 0 && this.rotationMode === 'time' && rotationIndexes.length > 1) {
+      const elapsed = Date.now() - (this.lastRotationTimes[pType] || Date.now());
       const intervalMs = this.rotationIntervalMin * 60_000;
       if (elapsed >= intervalMs) {
-        this.currentIndex = (this.currentIndex + 1) % total;
-        this.lastRotationTime = Date.now();
+        startPos = (startPos + 1) % rotationIndexes.length;
+        this.currentIndexes[pType] = rotationIndexes[startPos];
+        this.lastRotationTimes[pType] = Date.now();
       }
     }
+    const startIdx = rotationIndexes[startPos];
 
     // Pass 1: healthy (not offline) providers
-    for (let attempt = 0; attempt < total; attempt++) {
-      const idx = (this.currentIndex + attempt) % total;
+    for (let attempt = 0; attempt < rotationIndexes.length; attempt++) {
+      const idx = rotationIndexes[(startPos + attempt) % rotationIndexes.length];
       const p   = this.providers[idx];
       const id  = this._id(p);
 
@@ -168,42 +189,44 @@ class KeyPool {
       if (this._isRateLimited(p, model)) continue;
 
       const count = this._count(p);
-      if (count >= this.threshold) {
-        this.currentIndex = (this.currentIndex + 1) % total;
-        this.lastRotationTime = Date.now();
+      if (count >= this.threshold && rotationIndexes.length > 1) {
+        const currentPos = rotationIndexes.indexOf(idx);
+        this.currentIndexes[pType] = rotationIndexes[(currentPos + 1) % rotationIndexes.length];
+        this.lastRotationTimes[pType] = Date.now();
         return this.getProvider(model, excludeSet, depth + 1, requiredType);
       }
 
       if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
         // Sticky behavior: stick to this provider, reset timer only on failover transition
-        if (idx !== this.currentIndex) {
-          this.currentIndex = idx;
-          this.lastRotationTime = Date.now();
+        if (idx !== startIdx) {
+          this.currentIndexes[pType] = idx;
+          this.lastRotationTimes[pType] = Date.now();
         }
       } else {
         // Round-robin
-        if (idx !== this.currentIndex) {
-          this.currentIndex = idx;
-          this.roundRobinRequestCount = 1;
+        if (idx !== startIdx) {
+          this.currentIndexes[pType] = idx;
+          this.roundRobinCounts[pType] = 1;
         } else {
-          this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+          this.roundRobinCounts[pType] = (this.roundRobinCounts[pType] || 0) + 1;
         }
 
-        if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+        if (this.roundRobinCounts[pType] >= this.roundRobinSwitchLimit) {
           if (this.rotationMode === 'random') {
-            this.currentIndex = Math.floor(Math.random() * total);
+            this.currentIndexes[pType] = rotationIndexes[Math.floor(Math.random() * rotationIndexes.length)];
           } else {
-            this.currentIndex = (idx + 1) % total;
+            const currentPos = rotationIndexes.indexOf(idx);
+            this.currentIndexes[pType] = rotationIndexes[(currentPos + 1) % rotationIndexes.length];
           }
-          this.roundRobinRequestCount = 0;
+          this.roundRobinCounts[pType] = 0;
         }
       }
       return p;
     }
 
     // Pass 2: include offline providers as fallback
-    for (let attempt = 0; attempt < total; attempt++) {
-      const idx = (this.currentIndex + attempt) % total;
+    for (let attempt = 0; attempt < rotationIndexes.length; attempt++) {
+      const idx = rotationIndexes[(startPos + attempt) % rotationIndexes.length];
       const p   = this.providers[idx];
       const id  = this._id(p);
 
@@ -213,26 +236,27 @@ class KeyPool {
       if (!this._supportsModel(p, model)) continue;
       if (!this._isRateLimited(p, model)) {
         if (this.rotationMode === 'threshold' || this.rotationMode === 'time') {
-          if (idx !== this.currentIndex) {
-            this.currentIndex = idx;
-            this.lastRotationTime = Date.now();
+          if (idx !== startIdx) {
+            this.currentIndexes[pType] = idx;
+            this.lastRotationTimes[pType] = Date.now();
           }
         } else {
           // Round-robin fallback
-          if (idx !== this.currentIndex) {
-            this.currentIndex = idx;
-            this.roundRobinRequestCount = 1;
+          if (idx !== startIdx) {
+            this.currentIndexes[pType] = idx;
+            this.roundRobinCounts[pType] = 1;
           } else {
-            this.roundRobinRequestCount = (this.roundRobinRequestCount || 0) + 1;
+            this.roundRobinCounts[pType] = (this.roundRobinCounts[pType] || 0) + 1;
           }
 
-          if (this.roundRobinRequestCount >= this.roundRobinSwitchLimit) {
+          if (this.roundRobinCounts[pType] >= this.roundRobinSwitchLimit) {
             if (this.rotationMode === 'random') {
-              this.currentIndex = Math.floor(Math.random() * total);
+              this.currentIndexes[pType] = rotationIndexes[Math.floor(Math.random() * rotationIndexes.length)];
             } else {
-              this.currentIndex = (idx + 1) % total;
+              const currentPos = rotationIndexes.indexOf(idx);
+              this.currentIndexes[pType] = rotationIndexes[(currentPos + 1) % rotationIndexes.length];
             }
-            this.roundRobinRequestCount = 0;
+            this.roundRobinCounts[pType] = 0;
           }
         }
         return p;
@@ -301,7 +325,7 @@ class KeyPool {
         rpm:                 p.rpm || null,
         tpm:                 p.tpm || null,
         tokensLastMinute:    tokens,
-        isCurrent:           idx === this.currentIndex,
+        isCurrent:           idx === (this.currentIndexes[p.type || 'openai'] || 0),
         consecutiveFailures: failures,
         enabled:             p.enabled !== false,
         status:
