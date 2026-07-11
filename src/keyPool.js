@@ -9,7 +9,7 @@ const OFFLINE_THRESHOLD = 3;
 const OFFLINE_RETRY_MS  = 60_000;
 
 class KeyPool {
-  constructor(providers, threshold = 32, maxPerMinute = 35, rotationIntervalMin = 60, rotationMode = 'time', roundRobinSwitchLimit = 1, disabledModels = []) {
+  constructor(providers, threshold = 32, maxPerMinute = 35, rotationIntervalMin = 60, rotationMode = 'time', roundRobinSwitchLimit = 1, disabledModels = [], customModels = []) {
     this.providers    = providers;
     this.threshold    = threshold;
     this.maxPerMinute = maxPerMinute;
@@ -26,6 +26,7 @@ class KeyPool {
     this.consecutiveFailures     = {};
     this.lastFailureTime         = {};
     this.disabledModels          = Array.isArray(disabledModels) ? disabledModels : [];
+    this.customModels            = Array.isArray(customModels) ? customModels : [];
 
     for (const p of providers) {
       const id = this._id(p);

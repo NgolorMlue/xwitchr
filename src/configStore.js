@@ -24,6 +24,7 @@ const DEFAULTS = {
   providers:         [],
   apiModes:          { openai: true, anthropic: false, google: false },
   disabledModels:    [],
+  healthCheckInterval: 4, // in hours
   dashboardUsername: '',
   dashboardPasswordHash: '',
   port:              51067,
@@ -31,6 +32,7 @@ const DEFAULTS = {
   httpsCertPath:     '',
   httpsKeyPath:      '',
   healthCheckExclude: '',
+  customModels:      [],
 };
 
 function generateToken() {
@@ -144,6 +146,17 @@ function load() {
   cfg.providers = (cfg.providers || []).map(sanitizeProvider).filter(p => p.url && p.key);
 
   cfg.disabledModels = Array.isArray(cfg.disabledModels) ? cfg.disabledModels.map(String) : [];
+  cfg.healthCheckInterval = typeof cfg.healthCheckInterval === 'number' && cfg.healthCheckInterval > 0 ? cfg.healthCheckInterval : 4;
+
+  cfg.customModels = Array.isArray(cfg.customModels)
+    ? cfg.customModels.map(cm => {
+        if (!cm || typeof cm !== 'object' || !cm.name) return null;
+        return {
+          name: String(cm.name).trim(),
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 20) : []
+        };
+      }).filter(Boolean)
+    : [];
 
   // Seed / generate dashboard credentials
   if (!cfg.dashboardUsername) {
@@ -190,13 +203,23 @@ function save(config) {
   if (!merged.anthropicProxyToken) merged.anthropicProxyToken = existing.anthropicProxyToken || generateToken();
   if (!merged.googleProxyToken)    merged.googleProxyToken    = existing.googleProxyToken    || generateToken();
   if (!merged.apiModes || typeof merged.apiModes !== 'object') merged.apiModes = DEFAULTS.apiModes;
-  merged.apiModes.openai = true; // OpenAI mode always on
+  merged.apiModes.openai = typeof merged.apiModes.openai === 'boolean' ? merged.apiModes.openai : true;
   const parsedPort = parseInt(merged.port, 10);
   merged.port = (parsedPort >= 1 && parsedPort <= 65535) ? parsedPort : 51067;
   merged.httpsEnabled  = !!merged.httpsEnabled;
   merged.httpsCertPath = String(merged.httpsCertPath || '').trim();
   merged.httpsKeyPath  = String(merged.httpsKeyPath  || '').trim();
   merged.disabledModels = Array.isArray(merged.disabledModels) ? merged.disabledModels.map(String) : (existing.disabledModels || []);
+  merged.healthCheckInterval = typeof config.healthCheckInterval === 'number' && config.healthCheckInterval > 0 ? config.healthCheckInterval : 4;
+  merged.customModels = Array.isArray(config.customModels)
+    ? config.customModels.map(cm => {
+        if (!cm || typeof cm !== 'object' || !cm.name) return null;
+        return {
+          name: String(cm.name).trim(),
+          models: Array.isArray(cm.models) ? cm.models.map(String).map(s => s.trim()).filter(Boolean).slice(0, 20) : []
+        };
+      }).filter(Boolean)
+    : (existing.customModels || []);
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), 'utf8');
   return merged;
 }

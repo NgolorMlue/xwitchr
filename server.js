@@ -55,7 +55,7 @@ let pool = buildPool(cfg);
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
-  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels);
+  return new KeyPool(c.providers, c.rotationThreshold, c.maxPerMinute, c.rotationIntervalMin, c.rotationMode, c.roundRobinSwitchLimit, c.disabledModels, c.customModels);
 }
 
 const reqLogger = new RequestLogger(200);
@@ -73,7 +73,7 @@ const healthChecker = new ModelHealthChecker(
     console.log('[HealthChecker] Pool rebuilt with updated model health states');
   }
 );
-healthChecker.start(4 * 60 * 60 * 1000); // 4-hour interval
+healthChecker.start((cfg.healthCheckInterval || 4) * 60 * 60 * 1000);
 
 // ── Shared constants ──────────────────────────────────────────────────────
 // Headers that should not be forwarded between client ↔ upstream
@@ -168,6 +168,17 @@ function authMiddleware(req, res, next) {
   if (req.path.startsWith('/proxy/') || req.path.startsWith('/v1/')) {
     const isAnthropic = req.path === '/v1/messages' || req.path === '/proxy/messages';
     const isGoogle    = req.path.startsWith('/v1/beta/') || req.path.startsWith('/proxy/beta/');
+
+    // Check if the requested API mode is enabled
+    if (isAnthropic && !cfg.apiModes?.anthropic) {
+      return res.status(403).json({ error: 'Anthropic API mode is disabled in settings.' });
+    }
+    if (isGoogle && !cfg.apiModes?.google) {
+      return res.status(403).json({ error: 'Google API mode is disabled in settings.' });
+    }
+    if (!isAnthropic && !isGoogle && !cfg.apiModes?.openai) {
+      return res.status(403).json({ error: 'OpenAI API mode is disabled in settings.' });
+    }
 
     const authHeader = req.headers['authorization'] || '';
     const match      = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -292,8 +303,15 @@ app.get('/config', (req, res) => {
 app.get('/config/full', (req, res) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || req.ip;
   console.log(`[Security] /config/full accessed from ${ip} at ${new Date().toISOString()}`);
-  // Explicitly exclude sensitive fields — never leak password hash or proxy tokens
-  const { dashboardPasswordHash, proxyAuthToken, anthropicProxyToken, googleProxyToken, ...safeCfg } = cfg;
+  
+  // Explicitly exclude sensitive fields — never leak the password hash
+  const { dashboardPasswordHash, ...safeCfg } = cfg;
+  
+  // Include proxy auth tokens so the profile tab can display/copy them
+  safeCfg.proxyAuthToken = cfg.proxyAuthToken || '';
+  safeCfg.anthropicProxyToken = cfg.anthropicProxyToken || '';
+  safeCfg.googleProxyToken = cfg.googleProxyToken || '';
+
   // Mask provider keys: send only last 6 chars hint + full URL (settings table needs it)
   safeCfg.providers = (cfg.providers || []).map(p => ({
     ...p,
@@ -315,7 +333,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   'keyInjectParam', 'keyInjectHeader', 'providers', 'apiModes', 'rotationIntervalMin',
   'rotationMode', 'roundRobinSwitchLimit',
   'port', 'httpsEnabled', 'httpsCertPath', 'httpsKeyPath',
-  'healthCheckExclude', 'disabledModels',
+  'healthCheckExclude', 'disabledModels', 'customModels', 'healthCheckInterval',
 ]);
 
 // ── POST /config ───────────────────────────────────────────────────────────
@@ -331,8 +349,9 @@ app.post('/config', (req, res) => {
     const saved = configStore.save({ ...cfg, ...patch });
     cfg  = saved;
     pool = buildPool(cfg);
-    // Re-run health check immediately so new providers/models are probed right away
-    healthChecker.runCheck().catch(e => console.warn('[HealthChecker] Post-config check error:', e.message));
+    // Restart health check daemon with updated interval and run check immediately
+    healthChecker.stop();
+    healthChecker.start((cfg.healthCheckInterval || 4) * 60 * 60 * 1000);
     console.log(`[Config] Updated — ${cfg.providers.length} providers`);
     res.json({ ok: true, message: `Config saved. ${cfg.providers.length} providers loaded.`, providerCount: cfg.providers.length });
   } catch (err) {
@@ -702,6 +721,18 @@ app.get('/health/models', (req, res) => {
   res.json(healthChecker.getResults());
 });
 
+// ── GET /health/models/stats ──────────────────────────────────────────────
+// Returns the full health check history for a specific model & provider URL.
+app.get('/health/models/stats', (req, res) => {
+  const { model, url } = req.query;
+  if (!model || !url) {
+    return res.status(400).json({ ok: false, error: 'Missing model or url query parameter' });
+  }
+
+  const history = healthChecker.history.filter(h => h.model === model && h.providerUrl === url);
+  res.json({ ok: true, history });
+});
+
 // ── POST /health/models/check ──────────────────────────────────────────────
 // Triggers an immediate health check (non-blocking — runs async in background).
 app.post('/health/models/check', (req, res) => {
@@ -840,6 +871,14 @@ app.get(['/v1/models', '/proxy/models'], (req, res) => {
       }
     }
   }
+  if (Array.isArray(cfg.customModels)) {
+    for (const cm of cfg.customModels) {
+      if (cm.name && !seen.has(cm.name)) {
+        seen.add(cm.name);
+        models.push({ id: cm.name, object: 'model', created: 0, owned_by: 'router' });
+      }
+    }
+  }
   res.json({ object: 'list', data: models });
 });
 
@@ -943,7 +982,28 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       const inputFormat  = req._inputFormat  || 'openai';
       const requiredType = req._requiredType || null;
 
-      provider = pool.getProvider(requestedModel, excludeSet, 0, requiredType);
+      let resolvedModel = requestedModel;
+      const customModel = pool.customModels?.find(cm => cm.name === requestedModel);
+      if (customModel) {
+        let found = false;
+        let lastErr = null;
+        for (const backingModel of customModel.models) {
+          try {
+            provider = pool.getProvider(backingModel, excludeSet, 0, requiredType);
+            resolvedModel = backingModel;
+            found = true;
+            break;
+          } catch (e) {
+            lastErr = e;
+            console.log(`[CustomModel] Fallback check failed for backing model "${backingModel}" in custom model "${requestedModel}": ${e.message}`);
+          }
+        }
+        if (!found) {
+          throw new Error(lastErr ? lastErr.message : `ALL_FALLBACKS_EXHAUSTED_FOR_CUSTOM_MODEL:${requestedModel}`);
+        }
+      } else {
+        provider = pool.getProvider(requestedModel, excludeSet, 0, requiredType);
+      }
       keyHint  = `...${provider.key.slice(-6)}`;
 
       const providerType = provider.type || 'openai';
@@ -955,7 +1015,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       let urlObj;
       if (providerType === 'google') {
         const action = wantsStream ? 'streamGenerateContent' : 'generateContent';
-        urlObj = new URL(`${provider.url.replace(/\/$/, '')}/models/${requestedModel || 'gemini-pro'}:${action}`);
+        urlObj = new URL(`${provider.url.replace(/\/$/, '')}/models/${resolvedModel || 'gemini-pro'}:${action}`);
         urlObj.searchParams.set('key', provider.key);
         if (wantsStream) urlObj.searchParams.set('alt', 'sse');
       } else {
@@ -988,6 +1048,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       }
 
       // ── Body preparation ───────────────────────────────────────────────────
+      if (req.body && typeof req.body === 'object' && req.body.model) {
+        req.body.model = resolvedModel;
+      }
+      if (req.query.model) {
+        req.query.model = resolvedModel;
+      }
+
       const isBodyMethod = !['GET', 'HEAD', 'DELETE'].includes(req.method.toUpperCase());
       let bodyStr;
       if (isMultipart) {
@@ -1014,13 +1081,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
         delete upstreamHeaders['content-length'];
       }
 
-      pool.recordRequest(provider, requestedModel);
+      pool.recordRequest(provider, resolvedModel);
 
       // ── Streaming path ─────────────────────────────────────────────────────
       // Google native streaming conversion is not yet implemented — return a clear error (#20)
       if (wantsStream && providerType === 'google') {
         const responseTime = Date.now() - startTime;
-        reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: 501, responseTime, error: 'Streaming not supported for Google native providers. Set stream:false or use an OpenAI-compatible provider.', payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: null });
+        reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: 501, responseTime, error: 'Streaming not supported for Google native providers. Set stream:false or use an OpenAI-compatible provider.', payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: null });
         return res.status(501).json({ error: 'Not Implemented', message: 'Streaming is not supported for Google native API providers via this router. Set "stream": false or use an OpenAI-compatible provider.' });
       }
       if (wantsStream) {
@@ -1071,7 +1138,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
             if (needsConversion && providerType === 'anthropic') {
               // Convert Anthropic SSE → OpenAI SSE on the fly
-              const sseState = { id: null, model: requestedModel, created: Math.floor(Date.now() / 1000) };
+              const sseState = { id: null, model: resolvedModel, created: Math.floor(Date.now() / 1000) };
               let lineBuf = '';
               let curEvent = '';
 
@@ -1107,8 +1174,8 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
               proxyRes.on('error', (err) => { req.off('close', onClientClose); settle(rejectStream, err); });
               proxyRes.on('end', () => {
                 req.off('close', onClientClose);
-                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, requestedModel);
-                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
+                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, resolvedModel);
+                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
                 settle(resolveStream, true);
               });
 
@@ -1146,8 +1213,8 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
                     } catch { /* skip malformed line, keep scanning */ }
                   }
                 }
-                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, requestedModel);
-                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
+                if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, resolvedModel);
+                try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
                 settle(resolveStream, true);
               });
             }
@@ -1203,7 +1270,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
           const resJson = JSON.parse(sendData.toString('utf8'));
           let converted;
           if (providerType === 'anthropic') converted = fmt.anthropicToOpenai(resJson);
-          else if (providerType === 'google')    converted = fmt.googleToOpenai(resJson, requestedModel);
+          else if (providerType === 'google')    converted = fmt.googleToOpenai(resJson, resolvedModel);
           if (converted) {
             sendData = Buffer.from(JSON.stringify(converted));
             res.setHeader('content-type', 'application/json');
@@ -1223,13 +1290,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
       res.status(upstream.status).send(sendData);
 
-      if (responseTokens?.total > 0) pool.recordTokens(provider, responseTokens.total, requestedModel);
+      if (responseTokens?.total > 0) pool.recordTokens(provider, responseTokens.total, resolvedModel);
 
       reqLogger.log({
         method: req.method, path: req.path, keyHint,
         urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0],
         status: upstream.status, responseTime, payload: reqPayloadStr,
-        model: requestedModel, ip: clientIp, userAgent: clientUserAgent, tokens: responseTokens,
+        model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: responseTokens,
       });
       return;
 

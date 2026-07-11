@@ -19,6 +19,7 @@ const path  = require('path');
 
 const DATA_DIR    = path.join(__dirname, '..', 'data');
 const HEALTH_FILE = path.join(DATA_DIR, 'model_health.json');
+const HEALTH_HISTORY_FILE = path.join(DATA_DIR, 'model_health_history.jsonl');
 
 const SLOW_THRESHOLD_MS = 5_000;  // > 5s = slow, ≤ 5s = alive
 const CHECK_TIMEOUT_MS  = 20_000; // generous timeout for slow endpoints
@@ -39,6 +40,7 @@ class ModelHealthChecker {
     this.onConfigUpdated = onConfigUpdated;
 
     this.results     = {};    // key → { status, latencyMs, lastChecked, error, providerUrl, model }
+    this.history     = [];    // Array of { timestamp, providerUrl, model, status, latencyMs }
     this.lastChecked = null;  // ISO string of last completed run
     this.nextCheck   = null;  // ISO string of scheduled next run
     this._timer      = null;
@@ -46,6 +48,7 @@ class ModelHealthChecker {
 
     this._ensureDir();
     this._loadFromDisk();
+    this._loadHistoryFromDisk();
   }
 
   // ── Private helpers ──────────────────────────────────────────────────────
@@ -102,6 +105,56 @@ class ModelHealthChecker {
       }
     } catch (e) {
       console.warn('[HealthChecker] Could not load health file:', e.message);
+    }
+  }
+
+  _loadHistoryFromDisk() {
+    this.history = [];
+    if (!fs.existsSync(HEALTH_HISTORY_FILE)) return;
+    try {
+      const raw = fs.readFileSync(HEALTH_HISTORY_FILE, 'utf8');
+      const lines = raw.split('\n').filter(Boolean);
+      for (const line of lines) {
+        try {
+          const e = JSON.parse(line);
+          this.history.push(e);
+        } catch { /* skip bad line */ }
+      }
+      console.log(`[HealthChecker] Loaded ${this.history.length} health history entries from disk`);
+      this._pruneHistory();
+    } catch (e) {
+      console.warn('[HealthChecker] Could not load health history:', e.message);
+    }
+  }
+
+  _pruneHistory() {
+    try {
+      const cutoff = Date.now() - 90 * 86400_000; // 90 days
+      const beforeCount = this.history.length;
+      this.history = this.history.filter(h => new Date(h.timestamp).getTime() >= cutoff);
+      const pruned = beforeCount - this.history.length;
+      if (pruned > 0) {
+        fs.writeFileSync(HEALTH_HISTORY_FILE, this.history.map(e => JSON.stringify(e)).join('\n') + '\n', 'utf8');
+        console.log(`[HealthChecker] Pruned ${pruned} old health history entries`);
+      }
+    } catch (e) {
+      console.warn('[HealthChecker] Failed to prune health history:', e.message);
+    }
+  }
+
+  _recordHistory(providerUrl, model, status, latencyMs) {
+    const entry = {
+      timestamp: new Date().toISOString(),
+      providerUrl,
+      model,
+      status,
+      latencyMs
+    };
+    this.history.push(entry);
+    try {
+      fs.appendFileSync(HEALTH_HISTORY_FILE, JSON.stringify(entry) + '\n', 'utf8');
+    } catch (e) {
+      console.warn('[HealthChecker] Could not append health history:', e.message);
     }
   }
 
@@ -267,6 +320,7 @@ class ModelHealthChecker {
         const key     = this._key(provider.url, model);
         const domain  = provider.url.replace(/^https?:\/\//, '').split('/')[0];
         this.results[key] = { ...result, providerUrl: provider.url, model };
+        this._recordHistory(provider.url, model, result.status, result.latencyMs);
         console.log(`[HealthChecker] ${domain} / ${model} → ${result.status} (${result.latencyMs}ms)`);
       }));
     }
@@ -385,12 +439,28 @@ class ModelHealthChecker {
       for (const model of models) {
         const key    = this._key(url, model);
         const cached = this.results[key];
+
+        // Filter history for this specific model and provider URL
+        const modelHistory = this.history.filter(h => h.model === model && h.providerUrl === url);
+        const totalChecks  = modelHistory.length;
+        const upChecks     = modelHistory.filter(h => h.status === 'alive' || h.status === 'slow').length;
+        const uptimePct    = totalChecks > 0 ? Math.round((upChecks / totalChecks) * 100) : null;
+
+        // Last 30 checks for visual status timeline
+        const recentHistory = modelHistory.slice(-30).map(h => ({
+          status:    h.status,
+          timestamp: h.timestamp,
+          latencyMs: h.latencyMs
+        }));
+
         modelList.push({
           model,
           status:      cached?.status      ?? 'unknown',
           latencyMs:   cached?.latencyMs   ?? null,
           lastChecked: cached?.lastChecked ?? null,
           error:       cached?.error       ?? null,
+          uptimePct,
+          history:     recentHistory,
         });
       }
       // Sort: dead first, then slow, then alive, then unknown

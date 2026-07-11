@@ -373,7 +373,7 @@
     .health-type-anthropic{background:rgba(168,85,247,.12);color:var(--purple)}
     .health-type-google{background:rgba(52,211,153,.12);color:#34d399}
     .health-model-list{display:flex;flex-direction:column}
-    .health-model-row{display:grid;grid-template-columns:20px 100px 1fr 120px 100px 120px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
+    .health-model-row{display:grid;grid-template-columns:20px 90px 1fr 70px 120px 100px 100px 90px 70px;align-items:center;gap:12px;padding:10px 20px;border-bottom:1px solid rgba(30,42,61,.5);transition:background .12s}
     .health-model-row:last-child{border-bottom:none}
     .health-model-row:hover{background:var(--surface2)}
     .health-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -396,7 +396,52 @@
     .health-latency-val{font-family:var(--font-mono);font-size:10px;color:var(--text-muted)}
     .health-error-tip{font-size:10px;color:var(--red);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-family:var(--font-mono)}
     .health-age{font-family:var(--font-mono);font-size:10px;color:var(--text-dim);white-space:nowrap}
-    @media(max-width:680px){.health-model-row{grid-template-columns:14px 90px 1fr 90px;}.health-model-row > :nth-child(5),.health-model-row > :nth-child(6){display:none}}
+    .health-timeline{display:flex;gap:3px;align-items:center}
+    .health-tick{width:4px;height:18px;border-radius:1px;background:var(--border);transition:transform .1s}
+    .health-tick:hover{transform:scaleY(1.25)}
+    .health-tick.alive{background:var(--green)}
+    .health-tick.slow{background:var(--yellow)}
+    .health-tick.dead{background:var(--red)}
+    .health-tick.unknown{background:var(--text-dim)}
+    @media(max-width:1050px){
+      .health-header-row{display:none !important}
+      .health-model-row{grid-template-columns:20px 90px 1fr 100px 90px}
+      .health-model-row > :nth-child(4), /* Uptime */
+      .health-model-row > :nth-child(5), /* Timeline */
+      .health-model-row > :nth-child(7), /* Latency */
+      .health-model-row > :nth-child(9)  /* Stats */ {display:none}
+    }
+    @media(max-width:680px){
+      .health-model-row{grid-template-columns:14px 70px 1fr 80px}
+      .health-model-row > :nth-child(2) /* Exclude */ {display:none}
+    }
+
+    /* ── Custom Modal & Overlay Styles ── */
+    .health-modal-overlay {
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 1100; opacity: 0; transition: opacity 0.2s ease;
+    }
+    .health-modal-overlay.active { opacity: 1; }
+    .health-modal-content {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius); width: 90%; max-width: 720px;
+      max-height: 85vh; overflow-y: auto; display: flex; flex-direction: column;
+      transform: scale(0.95); transition: transform 0.2s ease;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+    }
+    .health-modal-overlay.active .health-modal-content { transform: scale(1); }
+    .health-cal-day {
+      border-radius: 4px; border: 1px solid transparent; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 9px; cursor: default;
+    }
+    .health-cal-day.alive { background: rgba(34,197,94,0.12); border-color: rgba(34,197,94,0.25); color: var(--green); }
+    .health-cal-day.slow { background: rgba(234,179,8,0.12); border-color: rgba(234,179,8,0.25); color: var(--yellow); }
+    .health-cal-day.dead { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: var(--red); }
+    .health-cal-day.unknown { background: rgba(107,122,153,0.06); border-color: var(--border); color: var(--text-dim); }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     /* ── Fullscreen Request Log & Advanced Filters ── */
     .card.fullscreen {
@@ -734,6 +779,7 @@
       <button class="tab-btn" id="tab-statistics" onclick="switchTab('statistics')">📈 Statistics</button>
       <button class="tab-btn" id="tab-log" onclick="switchTab('log')">📋 Log</button>
       <button class="tab-btn" id="tab-models" onclick="switchTab('models')">🤖 Models</button>
+      <button class="tab-btn" id="tab-custom-models" onclick="switchTab('custom-models')">🛠️ Custom Models</button>
       <button class="tab-btn" id="tab-settings" onclick="switchTab('settings')">⚙️ Settings</button>
       <button class="tab-btn" id="tab-profile" onclick="switchTab('profile')">👤 Profile</button>
       <button class="tab-btn" id="tab-health" onclick="switchTab('health')">🩺 Health</button>
@@ -1228,6 +1274,11 @@
           <input class="form-input" id="healthCheckExclude" type="text" placeholder="e.g. tts-1, whisper-1, flux, dall-e" />
           <div class="form-hint">Models matching these names or prefixes (case-insensitive) won't be checked or auto-disabled. They will stay enabled.</div>
         </div>
+        <div class="form-group">
+          <label class="form-label" style="margin-top:12px;" for="healthCheckInterval">Check Interval (Hours)</label>
+          <input class="form-input" id="healthCheckInterval" type="number" min="0.1" step="0.1" placeholder="4" style="font-family:var(--font-mono)" />
+          <div class="form-hint">How often the background health check daemon pings configured models (e.g., 4 = every 4 hours, 0.5 = every 30 minutes).</div>
+        </div>
       </div>
 
     </div><!-- end left col -->
@@ -1389,8 +1440,8 @@
       <div class="card" style="display:flex;flex-direction:column;gap:12px">
         <div style="display:flex;align-items:center;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--border)">
           <div style="font-size:14px;font-weight:600;flex:1">OpenAI Compatible</div>
-          <label class="api-mode-toggle" title="Always enabled">
-            <input type="checkbox" checked disabled />
+          <label class="api-mode-toggle" title="Enable OpenAI API mode">
+            <input type="checkbox" id="apiModeOpenai" onchange="updateApiMode('openai',this.checked)" />
             <span class="slider"></span>
           </label>
         </div>
@@ -1578,6 +1629,84 @@
   <div id="healthProviderList" style="display:flex;flex-direction:column;gap:16px"></div>
 
 </div><!-- end health -->
+
+<!-- ══ CUSTOM MODELS ══ -->
+<div class="page fade-in" id="page-custom-models">
+  <div class="settings-grid">
+    
+    <!-- LEFT: List of existing Custom Models -->
+    <div class="settings-col">
+      <div class="card" style="flex:1; display:flex; flex-direction:column; min-height: 400px;">
+        <div class="section-header">
+          <div class="section-title">🛠️ Custom Models</div>
+        </div>
+        <div class="form-hint" style="margin-bottom:12px">
+          Custom models route to a list of fallback models. If a backing model is disabled/down, the router falls back to the next model in the list.
+        </div>
+        
+        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="customModelsList">
+          <!-- Custom models rendered here -->
+        </div>
+        
+        <button class="add-row-btn" style="border:1px dashed var(--border2); border-radius:8px; margin-top:12px; padding:12px; background:none; color:var(--text); cursor:pointer; font-weight:500; font-family:'Inter',sans-serif; transition:background .15s, border-color .15s;" onclick="addNewCustomModel()" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">＋ Create Custom Model</button>
+      </div>
+    </div>
+    
+    <!-- RIGHT: Edit Active Custom Model -->
+    <div class="settings-col" id="customModelEditCol" style="display:none;">
+      <div class="card" style="display:flex; flex-direction:column; height:100%; width:100%">
+        <div class="section-header" style="border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+          <div class="section-title" id="editModelTitle">Edit Custom Model</div>
+          <button class="del-btn" onclick="closeEditModel()" title="Close editor" style="padding:6px 10px; font-size:12px">✕</button>
+        </div>
+        
+        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding-right:6px;">
+          <div class="form-group">
+            <label class="form-label" for="customModelNameInput">Custom Model Name</label>
+            <input class="form-input" id="customModelNameInput" type="text" placeholder="e.g. agentic-xwtchr" style="font-family:var(--font-mono)" />
+            <div class="form-hint">This is the model name clients will request.</div>
+          </div>
+          
+          <div class="form-group">
+            <label class="form-label">Backing Models (Fallback Order)</label>
+            <div class="form-hint" style="margin-bottom:8px">Define fallback order (1 = primary, 20 = final fallback). Empty fields are ignored.</div>
+            
+            <div id="fallbackListContainer" style="display:flex; flex-direction:column; gap:8px;">
+              <!-- Dynamic list of fallback rows -->
+            </div>
+            
+            <button class="icon-btn" style="margin-top:8px; align-self:flex-start; font-size:12px" id="addFallbackRowBtn" onclick="addFallbackRow()">＋ Add Fallback Model</button>
+          </div>
+          
+          <div class="form-group" style="border-top:1px dashed var(--border); padding-top:16px; margin-top:8px;">
+            <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+              <span>Bulk Paste Backing Models</span>
+              <span style="font-size:10px; font-weight:normal; color:var(--text-dim);">One per line, or comma-separated</span>
+            </label>
+            <textarea class="form-input" id="customModelBulkPasteInput" rows="3" placeholder="gpt-4o&#10;claude-3-5-sonnet&#10;gemini-1.5-pro" style="font-family:var(--font-mono); font-size:12px; resize:vertical; width:100%; box-sizing:border-box; margin-bottom:8px;"></textarea>
+            <button class="icon-btn" style="font-size:12px; padding:6px 12px; background:var(--surface2); border:1px solid var(--border2); color:var(--accent);" onclick="applyCustomModelBulkPaste()">📋 Load Bulk Paste</button>
+          </div>
+        </div>
+        
+        <div class="provider-actions" style="margin-top:16px; border-top:1px solid var(--border); padding-top:12px; display:flex; gap:8px;">
+          <button class="save-btn" style="padding:8px 20px; font-size:12.5px" onclick="saveCustomModelEdits()">Apply Edits</button>
+          <button class="icon-btn" onclick="closeEditModel()">Cancel</button>
+        </div>
+      </div>
+    </div>
+    
+  </div>
+  
+  <!-- Save Bar -->
+  <div class="save-bar">
+    <button class="save-btn" id="saveCustomModelsBtn" onclick="saveConfig({ keepTab: true })">💾 Save &amp; Apply</button>
+    <div class="save-status hidden" id="saveCustomModelsStatus"></div>
+    <div style="flex:1"></div>
+    <div style="font-size:11px;color:var(--text-dim)">Saved to <code style="color:var(--text-muted)">config.json</code> — no restart needed</div>
+  </div>
+  
+  <datalist id="knownModelsDatalist"></datalist>
+</div>
 
 <!-- ══ MODEL MODAL ══ -->
 <div id="modelModal" class="modal-overlay" style="display:none" onclick="onModalOverlayClick(event)">
@@ -1907,6 +2036,10 @@ function switchTab(tab) {
   if (tab === 'models') {
     loadConfig();
     renderModelsTab();
+  }
+  if (tab === 'custom-models') {
+    loadConfig();
+    renderCustomModels();
   }
   if (tab === 'health') {
     fetchHealthData();
@@ -3765,6 +3898,10 @@ async function modelsTabSaveSelection() {
   statusEl.className = 'save-status';
   statusEl.style.color = 'var(--accent)';
   
+  let allOk = true;
+  const errors = [];
+  const allowedModelsList = _modelsTabCached.filter(m => !_disabledModels.includes(m));
+  
   for (let i = 0; i < _providers.length; i++) {
     const p = _providers[i];
     if (!p.url || !p.key) continue;
@@ -3776,7 +3913,7 @@ async function modelsTabSaveSelection() {
     });
     
     // Allowed models = intersection of global allowed and provider's models, with per-model limits
-    const providerAllowed = _modelsTabAllowed
+    const providerAllowed = allowedModelsList
       .filter(m => providerModels.includes(m))
       .map(m => {
         const lim = _modelsTabModelLimits[m] || {};
@@ -4292,6 +4429,7 @@ setInterval(fetchLogs,1500);
 // SETTINGS: Load
 // ════════════════════════════════════════════════════════════
 let _providers = [];
+let _customModels = [];
 
 async function loadConfig(){
   try{
@@ -4322,6 +4460,8 @@ async function loadConfig(){
     if (kpEl) kpEl.value = cfg.httpsKeyPath  || '';
     const hcExclude = document.getElementById('healthCheckExclude');
     if (hcExclude) hcExclude.value = cfg.healthCheckExclude || '';
+    const hcInterval = document.getElementById('healthCheckInterval');
+    if (hcInterval) hcInterval.value = typeof cfg.healthCheckInterval === 'number' ? cfg.healthCheckInterval : 4;
     // Show restart badge if saved port differs from what server is currently listening on
     const restartBadge = document.getElementById('serverRestartBadge');
     if (restartBadge) restartBadge.style.display = (cfg.activePort && cfg.port && cfg.activePort !== cfg.port) ? 'block' : 'none';
@@ -4329,6 +4469,8 @@ async function loadConfig(){
     const prevProviderCount = _providers.length;
     _providers = cfg.providers||[];
     _disabledModels = cfg.disabledModels || [];
+    _customModels = cfg.customModels || [];
+    renderCustomModels();
     updateModelStatusSummary();
     // If provider list changed, clear stale model cache to force a fresh load
     if (_providers.length !== prevProviderCount) {
@@ -4346,8 +4488,10 @@ async function loadConfig(){
     }
     // Load API modes
     const modes = cfg.apiModes || {};
+    const elOpe = document.getElementById('apiModeOpenai');
     const elAnt = document.getElementById('apiModeAnthropic');
     const elGoo = document.getElementById('apiModeGoogle');
+    if (elOpe) elOpe.checked = modes.openai !== false;
     if (elAnt) elAnt.checked = !!modes.anthropic;
     if (elGoo) elGoo.checked = !!modes.google;
     if (document.getElementById('updateUsername')) {
@@ -4489,7 +4633,7 @@ function updateApiMode(mode, val) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apiModes: {
-      openai: true,
+      openai:    document.getElementById('apiModeOpenai')?.checked    || false,
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
       google:    document.getElementById('apiModeGoogle')?.checked    || false,
       [mode]: val,
@@ -4981,22 +5125,67 @@ async function saveModelSelection() {
 // ════════════════════════════════════════════════════════════
 // SETTINGS: Token
 // ════════════════════════════════════════════════════════════
+function showConfirm(message, onConfirm) {
+  let confirmOverlay = document.getElementById('customConfirmModal');
+  if (confirmOverlay) confirmOverlay.remove();
+
+  confirmOverlay = document.createElement('div');
+  confirmOverlay.id = 'customConfirmModal';
+  confirmOverlay.className = 'health-modal-overlay';
+  confirmOverlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1200; transition: opacity 0.2s ease;
+  `;
+
+  confirmOverlay.innerHTML = `
+    <div class="health-modal-content" style="max-width: 400px; padding: 24px; text-align: center; gap: 16px; align-items: center; justify-content: center;">
+      <div style="font-size: 16px; font-weight: 700; color: var(--text)">Are you sure?</div>
+      <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 8px 0 12px 0;">${escHtml(message).replace(/\n/g, '<br>')}</div>
+      <div style="display: flex; gap: 12px; width: 100%; justify-content: center;">
+        <button id="customConfirmCancel" style="flex:1; background: var(--surface3); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 16px; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size:12px;">Cancel</button>
+        <button id="customConfirmOK" style="flex:1; background: var(--red); border: 1px solid var(--red); border-radius: var(--radius); padding: 8px 16px; color: #fff; font-weight: 600; cursor: pointer; font-size:12px;">Yes, Regenerate</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(confirmOverlay);
+  
+  // Fade in animation
+  setTimeout(() => {
+    confirmOverlay.classList.add('active');
+  }, 10);
+
+  const closeFn = () => {
+    confirmOverlay.classList.remove('active');
+    setTimeout(() => confirmOverlay.remove(), 200);
+  };
+
+  confirmOverlay.querySelector('#customConfirmCancel').addEventListener('click', closeFn);
+  confirmOverlay.querySelector('#customConfirmOK').addEventListener('click', () => {
+    closeFn();
+    onConfirm();
+  });
+}
+
 async function regenToken(field='proxyAuthToken'){
-  if(!confirm('Generate new token for this API mode?\n\nAnyone using the old key will need to update.'))return;
-  try{
-    const res=await authFetch('/config/regenerate-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field})});
-    const data=await res.json();
-    if(data.ok){
-      const el=document.getElementById(field);
-      if(el) el.value=data.token;
-      if(field==='proxyAuthToken'){
-        _currentToken=data.token;
-        updateAuthExample(data.token);
+  showConfirm('Generate new token for this API mode?\n\nAnyone using the old key will need to update.', async () => {
+    try{
+      const res=await authFetch('/config/regenerate-token',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({field})});
+      const data=await res.json();
+      if(data.ok){
+        const el=document.getElementById(field);
+        if(el) el.value=data.token;
+        if(field==='proxyAuthToken'){
+          _currentToken=data.token;
+          updateAuthExample(data.token);
+        }
+      }else{
+        alert('Failed: '+(data.error||'Unknown'));
       }
-    }else{
-      alert('Failed: '+(data.error||'Unknown'));
-    }
-  }catch(e){alert('Failed: '+e.message);}
+    }catch(e){alert('Failed: '+e.message);}
+  });
 }
 
 function toggleTokenVis(inputId, btnId, e) {
@@ -5096,7 +5285,7 @@ function buildConfigPayload() {
     keyInjectHeader:   document.getElementById('keyInjectHeader').value.trim()||'X-API-Key',
     providers:         getProviders(),
     apiModes: {
-      openai:    true,
+      openai:    document.getElementById('apiModeOpenai')?.checked || false,
       anthropic: document.getElementById('apiModeAnthropic')?.checked || false,
       google:    document.getElementById('apiModeGoogle')?.checked    || false,
     },
@@ -5105,6 +5294,8 @@ function buildConfigPayload() {
     httpsCertPath: document.getElementById('httpsCertPath')?.value?.trim() || '',
     httpsKeyPath:  document.getElementById('httpsKeyPath')?.value?.trim()  || '',
     healthCheckExclude: document.getElementById('healthCheckExclude')?.value || '',
+    healthCheckInterval: parseFloat(document.getElementById('healthCheckInterval')?.value) || 4,
+    customModels:  _customModels,
   };
 }
 
@@ -5545,6 +5736,18 @@ function renderHealthTab(data) {
           <span>${escHtml(keysLabel)} · ${(prov.models||[]).length} model${(prov.models||[]).length !== 1 ? 's' : ''}</span>
         </div>
       </div>
+      <!-- Column headers for wide viewports -->
+      <div class="health-header-row" style="display:grid;grid-template-columns:20px 90px 1fr 70px 120px 100px 100px 90px 70px;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid var(--border);background:var(--surface3);margin-bottom:0">
+        <div style="width:8px"></div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Exclude</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Model Name</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Uptime</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">History (30d)</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Status</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Latency</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Age</div>
+        <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:center">Actions</div>
+      </div>
       <div class="health-model-list" id="hml-${escHtml(prov.domain)}"></div>
     `;
     container.appendChild(card);
@@ -5571,6 +5774,39 @@ function renderHealthTab(data) {
         <span>Exclude</span>
       </label>`;
 
+      // Uptime percentage cell
+      let uptimeText = '—';
+      let uptimeColor = 'var(--text-dim)';
+      if (m.uptimePct !== null && m.uptimePct !== undefined) {
+        uptimeText = `${m.uptimePct}%`;
+        if (m.uptimePct >= 90) uptimeColor = 'var(--green)';
+        else if (m.uptimePct >= 75) uptimeColor = 'var(--yellow)';
+        else uptimeColor = 'var(--red)';
+      }
+      const uptimeCell = `<div style="text-align:center;font-size:12px;font-weight:600;color:${uptimeColor}">${uptimeText}</div>`;
+
+      // Visual timeline ticks (last 20 checks)
+      const ticks = (m.history || []).slice(-20);
+      while (ticks.length < 20) {
+        ticks.unshift({ status: 'unknown', timestamp: null });
+      }
+      const timelineHtml = `<div class="health-timeline">
+        ${ticks.map(t => {
+          let titleStr = 'No data';
+          if (t.timestamp) {
+            const timeStr = new Date(t.timestamp).toLocaleString();
+            titleStr = `Status: ${t.status}\nTime: ${timeStr}${t.latencyMs ? `\nLatency: ${t.latencyMs}ms` : ''}`;
+          }
+          return `<div class="health-tick ${t.status}" title="${escHtml(titleStr)}"></div>`;
+        }).join('')}
+      </div>`;
+
+      // Stats popup trigger
+      const safeModelName = escHtml(m.model).replace(/'/g, "\\'");
+      const safeUrl = escHtml(prov.url).replace(/'/g, "\\'");
+      const statsBtn = `<button onclick="openHealthAnalytics('${safeModelName}', '${safeUrl}')"
+        style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:5px;color:var(--accent);font-size:10px;font-weight:600;padding:4px 8px;cursor:pointer;white-space:nowrap">📊 Stats</button>`;
+
       const row = document.createElement('div');
       row.className = 'health-model-row';
       if (isExcluded) row.style.opacity = '0.6';
@@ -5584,7 +5820,9 @@ function renderHealthTab(data) {
           <div class="health-model-name" title="${escHtml(m.model)}">${escHtml(m.model)}</div>
           ${errTip}
         </div>
-        <div>
+        ${uptimeCell}
+        ${timelineHtml}
+        <div style="text-align:center">
           <span class="health-status-badge ${st}">${isExcluded ? '🚫 Excluded' : (st === 'alive' ? '✓ Alive' : st === 'slow' ? '🐢 Slow' : st === 'dead' ? '✕ Dead' : '? Unknown')}</span>
         </div>
         <div class="health-latency-wrap">
@@ -5592,6 +5830,7 @@ function renderHealthTab(data) {
           <div class="health-latency-val">${latLabel}</div>
         </div>
         <div class="health-age">${ageStr}</div>
+        <div style="text-align:center">${statsBtn}</div>
       `;
       modelList.appendChild(row);
     }
@@ -5810,6 +6049,477 @@ async function toggleModelExclusion(modelName, exclude) {
   await persistConfigForModelActions();
   // Fetch fresh health data to reflect the changes (since exclusions change check statuses)
   await fetchHealthData();
+}
+
+// ── Health Uptime Analytics Modal Logic ──
+async function openHealthAnalytics(model, url) {
+  // Create modal container if not exists
+  let modalOverlay = document.getElementById('healthAnalyticsModal');
+  if (modalOverlay) modalOverlay.remove();
+
+  modalOverlay = document.createElement('div');
+  modalOverlay.id = 'healthAnalyticsModal';
+  modalOverlay.className = 'health-modal-overlay';
+  modalOverlay.style.cssText = `
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.65); backdrop-filter: blur(4px);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 1100; transition: opacity 0.2s ease;
+  `;
+
+  // Set loading content initially
+  modalOverlay.innerHTML = `
+    <div class="health-modal-content" style="max-width: 400px; padding: 24px; text-align: center; gap: 12px; align-items: center; justify-content: center;">
+      <div style="font-size: 16px; font-weight: 600; color: var(--text)">Loading Analytics…</div>
+      <div style="font-size: 11px; color: var(--text-dim); font-family: var(--font-mono)">${escHtml(model)}</div>
+      <div style="display:flex; justify-content:center; margin-top:8px;">
+        <div style="width: 24px; height: 24px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modalOverlay);
+  
+  // Fade in animation
+  setTimeout(() => modalOverlay.classList.add('active'), 10);
+
+  // Close helper
+  const closeFn = () => {
+    modalOverlay.classList.remove('active');
+    setTimeout(() => modalOverlay.remove(), 200);
+  };
+  window.closeHealthModal = closeFn;
+
+  // Click background to close
+  modalOverlay.addEventListener('click', (e) => {
+    if (e.target === modalOverlay) closeFn();
+  });
+
+  try {
+    const res = await authFetch(`/health/models/stats?model=${encodeURIComponent(model)}&url=${encodeURIComponent(url)}`);
+    if (res.status === 401) { closeFn(); showLogin(); return; }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Failed to load data');
+
+    const history = data.history || [];
+
+    // Calculate Summary Stats
+    const totalChecks = history.length;
+    const successfulChecks = history.filter(h => h.status === 'alive' || h.status === 'slow').length;
+    const uptimePct = totalChecks > 0 ? Math.round((successfulChecks / totalChecks) * 100) : 0;
+    
+    // Average Latency of non-dead checks
+    const activeChecks = history.filter(h => h.status !== 'dead' && h.latencyMs);
+    const avgLatencyMs = activeChecks.length > 0 ? Math.round(activeChecks.reduce((s, h) => s + h.latencyMs, 0) / activeChecks.length) : 0;
+    const outagesCount = history.filter(h => h.status === 'dead').length;
+
+    let uptimeColor = 'var(--red)';
+    if (uptimePct >= 90) uptimeColor = 'var(--green)';
+    else if (uptimePct >= 75) uptimeColor = 'var(--yellow)';
+
+    let outagesColor = outagesCount > 0 ? 'var(--red)' : 'var(--text-muted)';
+
+    // 1. Calculate Daily Availability Grid (Last 30 Days)
+    const dailyGrid = [];
+    for (let d = 29; d >= 0; d--) {
+      const date = new Date(Date.now() - d * 86400_000);
+      const dayChecks = history.filter(h => {
+        const itemDate = new Date(h.timestamp);
+        return itemDate.getFullYear() === date.getFullYear() &&
+               itemDate.getMonth() === date.getMonth() &&
+               itemDate.getDate() === date.getDate();
+      });
+
+      const dayTotal = dayChecks.length;
+      const dayDead  = dayChecks.filter(h => h.status === 'dead').length;
+      const daySlow  = dayChecks.filter(h => h.status === 'slow').length;
+
+      let cls = 'unknown';
+      let statusLabel = 'No checks recorded';
+      if (dayTotal > 0) {
+        if (dayDead === dayTotal) {
+          cls = 'dead';
+          statusLabel = '100% Outage (All checks failed)';
+        } else if (dayDead > 0) {
+          cls = 'dead';
+          statusLabel = `Degraded (${dayDead} failed, ${daySlow} slow of ${dayTotal} checks)`;
+        } else if (daySlow > 0) {
+          cls = 'slow';
+          statusLabel = `Slow responses (${daySlow} of ${dayTotal} checks)`;
+        } else {
+          cls = 'alive';
+          statusLabel = `100% Up (All ${dayTotal} checks successful)`;
+        }
+      }
+
+      const mDay = date.getDate();
+      const mMonth = date.toLocaleDateString(undefined, { month: 'short' });
+      const tooltip = `${mMonth} ${mDay}: ${statusLabel}`;
+
+      dailyGrid.push(`<div class="health-cal-day ${cls}" title="${escHtml(tooltip)}">${mDay}</div>`);
+    }
+    const dailyHtml = dailyGrid.join('');
+
+    // 2. Calculate Hourly Failure Patterns (0-23 hours)
+    const hourOutages = Array(24).fill(0);
+    history.forEach(h => {
+      if (h.status === 'dead') {
+        const hour = new Date(h.timestamp).getHours();
+        hourOutages[hour]++;
+      }
+    });
+
+    const maxHourOutages = Math.max(1, ...hourOutages);
+    const hourlyBars = [];
+    const hourlyLabels = [];
+    for (let h = 0; h < 24; h++) {
+      const count = hourOutages[h];
+      const pct = Math.max(4, Math.round((count / maxHourOutages) * 100));
+      const barColor = count > 0 ? 'var(--red)' : 'rgba(255, 255, 255, 0.05)';
+      const tooltip = `${count} outage${count !== 1 ? 's' : ''} recorded at ${h}:00 - ${(h+1)%24}:00`;
+
+      hourlyBars.push(`<div title="${escHtml(tooltip)}" style="flex:1;height:${pct}%;background:${barColor};border-radius:2px;cursor:pointer;transition:background 0.2s" onmouseover="this.style.background='var(--yellow)'" onmouseout="this.style.background='${barColor}'"></div>`);
+      hourlyLabels.push(`<div style="flex:1;font-size:8px;">${h}</div>`);
+    }
+    const hourlyBarsHtml = hourlyBars.join('');
+    const hourlyLabelsHtml = hourlyLabels.join('');
+
+    // 3. Outages / Slowdown Logs list (last 100 events)
+    const issueEvents = history.filter(h => h.status === 'dead' || h.status === 'slow');
+    issueEvents.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    let failureLogsHtml = '';
+    if (issueEvents.length === 0) {
+      failureLogsHtml = `<div style="padding:24px;text-align:center;font-size:11.5px;color:var(--text-dim)">No outages or latency spikes recorded over the last 90 days.</div>`;
+    } else {
+      failureLogsHtml = issueEvents.slice(0, 50).map(f => {
+        const timeStr = new Date(f.timestamp).toLocaleString();
+        const badgeCls = f.status === 'dead' ? 'dead' : 'slow';
+        const badgeText = f.status === 'dead' ? '✕ Dead' : '🐢 Slow';
+        const latText = f.latencyMs ? `${f.latencyMs}ms` : '—';
+        const errText = f.error || (f.status === 'slow' ? 'Slow response threshold exceeded' : 'Outage detected');
+        return `
+          <div style="display:grid;grid-template-columns:120px 70px 70px 1fr;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.03);font-size:11px">
+            <div style="font-family:var(--font-mono);color:var(--text-muted)">${timeStr}</div>
+            <div><span class="health-status-badge ${badgeCls}" style="padding:2px 8px;font-size:8px">${badgeText}</span></div>
+            <div style="font-family:var(--font-mono);color:var(--purple);text-align:right">${latText}</div>
+            <div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${escHtml(errText)}">${escHtml(errText)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // Populate Modal Content
+    modalOverlay.innerHTML = `
+      <div class="health-modal-content">
+        <div class="health-modal-header" style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--surface2)">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text);font-family:var(--font-mono)">${escHtml(model)}</div>
+            <div style="font-size:10px;color:var(--text-muted);font-family:var(--font-mono);margin-top:2px">${escHtml(url)}</div>
+          </div>
+          <button class="icon-btn" onclick="closeHealthModal()" style="font-size:14px;padding:4px 8px">✕</button>
+        </div>
+        <div class="health-modal-body" style="padding:20px;display:flex;flex-direction:column;gap:20px">
+          
+          <!-- Summary Cards -->
+          <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:12px">
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Uptime (90d)</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:${uptimeColor}">${uptimePct}%</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Total Checks</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:var(--text)">${totalChecks}</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Avg Latency</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:var(--purple)">${avgLatencyMs}ms</div>
+            </div>
+            <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center">
+              <div style="font-size:9px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.05em">Outages</div>
+              <div style="font-size:20px;font-weight:700;margin-top:4px;color:${outagesColor}">${outagesCount}</div>
+            </div>
+          </div>
+
+          <!-- Availability grid -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Last 30 Days Availability Calendar</div>
+            <div style="display:grid;grid-template-columns:repeat(10, 1fr);gap:6px">
+              ${dailyHtml}
+            </div>
+          </div>
+
+          <!-- Hourly patterns -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Hourly Failure Pattern</div>
+            <div style="font-size:10.5px;color:var(--text-muted);margin-bottom:10px">Displays the historical distribution of dead/outage pings by hour of the day.</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;gap:4px;height:55px;align-items:end;background:rgba(255,255,255,.015);border-radius:6px;padding:8px 6px;border:1px solid var(--border)">
+                ${hourlyBarsHtml}
+              </div>
+              <div style="display:flex;gap:4px;text-align:center;font-family:var(--font-mono);color:var(--text-dim)">
+                ${hourlyLabelsHtml}
+              </div>
+            </div>
+          </div>
+
+          <!-- Outage / Alert logs -->
+          <div>
+            <div style="font-size:10px;font-weight:700;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Recent Outage & Slowdown Log (Last 50 Events)</div>
+            <div style="border:1px solid var(--border);border-radius:6px;max-height:180px;overflow-y:auto;background:var(--surface2)">
+              <!-- Headers for logs -->
+              <div style="display:grid;grid-template-columns:120px 70px 70px 1fr;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--border);font-size:9px;font-weight:700;text-transform:uppercase;color:var(--text-dim);background:var(--surface3)">
+                <div>Time</div>
+                <div>Status</div>
+                <div style="text-align:right">Latency</div>
+                <div>Error Details</div>
+              </div>
+              ${failureLogsHtml}
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    `;
+
+  } catch (err) {
+    modalOverlay.innerHTML = `
+      <div class="health-modal-content" style="max-width: 400px; padding: 24px; text-align: center; gap: 12px; align-items: center; justify-content: center;">
+        <div style="font-size: 16px; font-weight: 600; color: var(--red)">Failed to load stats</div>
+        <div style="font-size: 12px; color: var(--text-muted)">${escHtml(err.message)}</div>
+        <button class="save-btn" onclick="closeHealthModal()" style="margin-top:12px;padding:6px 16px">Close</button>
+      </div>
+    `;
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+// CUSTOM MODELS TAB SCRIPTING
+// ════════════════════════════════════════════════════════════
+let _editingModelIndex = null;
+
+function renderCustomModels() {
+  const container = document.getElementById('customModelsList');
+  if (!container) return;
+  
+  const datalist = document.getElementById('knownModelsDatalist');
+  if (datalist) {
+    const known = getAllKnownModels();
+    datalist.innerHTML = known.map(m => `<option value="${escHtml(m)}"></option>`).join('');
+  }
+  
+  if (!_customModels || _customModels.length === 0) {
+    container.innerHTML = '<div class="empty-row" style="text-align:center; padding:24px; color:var(--text-dim);">No custom models created yet. Click "Create Custom Model" to start.</div>';
+    return;
+  }
+  
+  container.innerHTML = _customModels.map((cm, idx) => {
+    const fallbackList = cm.models.map((m, i) => {
+      const isHealthy = !_disabledModels.includes(m);
+      const dotColor = isHealthy ? 'var(--green)' : 'var(--red)';
+      const textStyle = isHealthy ? '' : 'text-decoration: line-through; opacity: 0.5;';
+      return `<div style="display:flex; align-items:center; gap:6px; font-size:11.5px; font-family:var(--font-mono); ${textStyle}">
+        <span style="width:6px; height:6px; border-radius:50%; background:${dotColor}; display:inline-block;"></span>
+        <span style="color:var(--text-dim)">#${i+1}:</span> <span>${escHtml(m)}</span>
+      </div>`;
+    }).join('');
+    
+    return `<div class="card" style="background:var(--surface2); border:1px solid var(--border); padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-family:var(--font-mono); font-weight:700; font-size:14px; color:var(--accent);">${escHtml(cm.name)}</span>
+        <div style="display:flex; gap:6px;">
+          <button class="icon-btn" style="padding:4px 8px; font-size:11.5px;" onclick="editCustomModel(${idx})">📝 Edit</button>
+          <button class="del-btn" style="padding:4px 8px; font-size:11.5px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="deleteCustomModel(${idx})">✕ Delete</button>
+        </div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--border); padding-top:8px;">
+        ${fallbackList || '<div style="font-size:11.5px; color:var(--text-dim)">No fallback models defined.</div>'}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function addNewCustomModel() {
+  _editingModelIndex = null;
+  document.getElementById('editModelTitle').textContent = 'Create Custom Model';
+  document.getElementById('customModelNameInput').value = '';
+  document.getElementById('customModelNameInput').disabled = false;
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    addFallbackRow('');
+  }
+  
+  document.getElementById('customModelEditCol').style.display = 'flex';
+  document.getElementById('customModelNameInput').focus();
+}
+
+function editCustomModel(idx) {
+  const cm = _customModels[idx];
+  if (!cm) return;
+  
+  _editingModelIndex = idx;
+  document.getElementById('editModelTitle').textContent = 'Edit Custom Model';
+  document.getElementById('customModelNameInput').value = cm.name;
+  document.getElementById('customModelNameInput').disabled = false;
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  
+  cm.models.forEach(m => {
+    addFallbackRow(m);
+  });
+  
+  if (cm.models.length < 3) {
+    for (let i = cm.models.length; i < 3; i++) {
+      addFallbackRow('');
+    }
+  }
+  
+  document.getElementById('customModelEditCol').style.display = 'flex';
+}
+
+function deleteCustomModel(idx) {
+  if (!confirm(`Delete custom model "${_customModels[idx].name}"?`)) return;
+  _customModels.splice(idx, 1);
+  renderCustomModels();
+  closeEditModel();
+}
+
+function closeEditModel() {
+  document.getElementById('customModelEditCol').style.display = 'none';
+  _editingModelIndex = null;
+}
+
+function addFallbackRow(val = '') {
+  const container = document.getElementById('fallbackListContainer');
+  const count = container.children.length;
+  if (count >= 20) {
+    alert('Maximum of 20 fallback models allowed.');
+    return;
+  }
+  
+  const known = getAllKnownModels();
+  let optionsHtml = `<option value="">-- Select Backing Model --</option>`;
+  const allOptions = [...new Set(known.concat(val ? [val] : []))].sort();
+  
+  optionsHtml += allOptions.map(m => {
+    const selected = m === val ? 'selected' : '';
+    return `<option value="${escHtml(m)}" ${selected}>${escHtml(m)}</option>`;
+  }).join('');
+  
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex; align-items:center; gap:8px;';
+  row.className = 'fallback-row';
+  row.innerHTML = `
+    <span style="font-family:var(--font-mono); font-size:11.5px; color:var(--text-dim); width:30px; text-align:right;">#${count+1}</span>
+    <select class="form-select fallback-input" style="flex:1; font-family:var(--font-mono); font-size:12.5px; padding:6px 10px; background:var(--surface2); border:1px solid var(--border2); border-radius:6px; color:var(--text); outline:none; height:36px; cursor:pointer;">
+      ${optionsHtml}
+    </select>
+    <div style="display:flex; gap:2px;">
+      <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, -1)" title="Move Up">↑</button>
+      <button class="icon-btn" style="padding:4px 6px; font-size:11px;" onclick="moveFallbackRow(this, 1)" title="Move Down">↓</button>
+      <button class="del-btn" style="padding:4px 6px; font-size:11px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="removeFallbackRow(this)" title="Remove">✕</button>
+    </div>
+  `;
+  container.appendChild(row);
+  updateFallbackLabels();
+}
+
+function applyCustomModelBulkPaste() {
+  const area = document.getElementById('customModelBulkPasteInput');
+  const text = area.value.trim();
+  if (!text) {
+    alert('Please paste some model IDs first.');
+    return;
+  }
+  
+  const parsed = text.split(/[\n,;]+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+    
+  if (parsed.length === 0) {
+    alert('No valid model IDs found.');
+    return;
+  }
+  
+  if (parsed.length > 20) {
+    alert('You pasted ' + parsed.length + ' models. Only the first 20 will be kept.');
+  }
+  
+  const modelsToKeep = parsed.slice(0, 20);
+  
+  const container = document.getElementById('fallbackListContainer');
+  container.innerHTML = '';
+  
+  modelsToKeep.forEach(m => {
+    addFallbackRow(m);
+  });
+  
+  area.value = '';
+}
+
+function removeFallbackRow(btn) {
+  btn.closest('.fallback-row').remove();
+  updateFallbackLabels();
+}
+
+function moveFallbackRow(btn, dir) {
+  const row = btn.closest('.fallback-row');
+  const sibling = dir === -1 ? row.previousElementSibling : row.nextElementSibling;
+  if (sibling && sibling.classList.contains('fallback-row')) {
+    const parent = row.parentNode;
+    if (dir === -1) {
+      parent.insertBefore(row, sibling);
+    } else {
+      parent.insertBefore(sibling, row);
+    }
+    updateFallbackLabels();
+  }
+}
+
+function updateFallbackLabels() {
+  const container = document.getElementById('fallbackListContainer');
+  const rows = container.querySelectorAll('.fallback-row');
+  rows.forEach((row, i) => {
+    row.querySelector('span').textContent = `#${i+1}`;
+  });
+}
+
+function saveCustomModelEdits() {
+  const nameInput = document.getElementById('customModelNameInput');
+  const name = nameInput.value.trim();
+  if (!name) {
+    alert('Please enter a custom model name.');
+    nameInput.focus();
+    return;
+  }
+  
+  const container = document.getElementById('fallbackListContainer');
+  const inputs = container.querySelectorAll('.fallback-input');
+  const models = Array.from(inputs).map(inp => inp.value.trim()).filter(Boolean);
+  
+  if (models.length === 0) {
+    alert('Please specify at least one backing model.');
+    return;
+  }
+  
+  const existingIdx = _customModels.findIndex(cm => cm.name === name);
+  if (existingIdx >= 0 && existingIdx !== _editingModelIndex) {
+    alert(`A custom model named "${name}" already exists.`);
+    nameInput.focus();
+    return;
+  }
+  
+  const newModel = { name, models };
+  if (_editingModelIndex === null) {
+    _customModels.push(newModel);
+  } else {
+    _customModels[_editingModelIndex] = newModel;
+  }
+  
+  renderCustomModels();
+  closeEditModel();
 }
 </script>
 </body>
