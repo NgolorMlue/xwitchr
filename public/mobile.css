@@ -1,0 +1,87 @@
+/* Mobile app shell. Loaded only below 680px so desktop layout stays untouched. */
+@media screen and (max-width: 680px) {
+  :root { --mobile-gutter: 14px; --mobile-nav-height: 72px; }
+  html, body { min-width: 0; font-size: 14px; -webkit-tap-highlight-color: transparent; }
+  body { padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+  .header { position: sticky; top: 0; display: grid !important; grid-template-areas: "brand right"; grid-template-columns: 1fr auto; height: 58px !important; padding: 8px var(--mobile-gutter) !important; gap: 8px !important; background: color-mix(in srgb, var(--bg) 88%, transparent); border-bottom-color: var(--border2); }
+  .header-left { display: contents !important; }
+  .header-brand { grid-area: brand; gap: 8px; font-size: 14px; }
+  .logo-icon, .logo-icon svg { width: 30px; height: 30px; }
+  .header-right { grid-area: right; gap: 7px !important; }
+  .live-badge { padding: 7px !important; font-size: 0 !important; }
+  .live-dot { width: 7px; height: 7px; }
+  #clock { display: none !important; }
+  #themeSelect { width: 40px; height: 34px; padding: 4px !important; color: transparent !important; font-size: 0 !important; }
+  .tab-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 400; display: flex !important; align-items: stretch; gap: 2px !important; width: 100%; height: var(--mobile-nav-height); padding: 7px 6px calc(7px + env(safe-area-inset-bottom)); overflow-x: auto !important; overscroll-behavior-x: contain; scrollbar-width: none; background: color-mix(in srgb, var(--surface) 94%, transparent); border-top: 1px solid var(--border2); box-shadow: 0 -10px 28px rgba(0, 0, 0, .22); backdrop-filter: blur(18px); }
+  .tab-nav::-webkit-scrollbar { display: none; }
+  .tab-btn { flex: 0 0 78px; min-height: 52px; padding: 7px 5px !important; border-radius: 10px; color: var(--text-muted); font-size: 10px !important; line-height: 1.25; white-space: normal !important; text-align: center; }
+  .tab-btn.active { color: var(--text); background: var(--surface3); box-shadow: inset 0 0 0 1px var(--border2); }
+  .page { width: 100%; max-width: none; padding: 18px var(--mobile-gutter) calc(18px + var(--mobile-nav-height)) !important; gap: 14px !important; }
+  .card, .capacity-card, .stat-card { border-radius: 14px; padding: 16px !important; }
+  .section-header { margin-bottom: 12px; gap: 10px; align-items: flex-start; }
+  .section-title { font-size: 10px; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+  .stat-card { min-height: 104px; gap: 7px; }
+  .stat-value { font-size: 24px; }
+  .stat-sub { font-size: 11px; }
+  .pool-stats-row { gap: 14px !important; padding-bottom: 14px; }
+  .pool-stat-col { padding-bottom: 14px !important; }
+  .pool-summary-row2 { gap: 10px !important; }
+  .pool-utilization-box { min-width: 0; }
+  .key-grid { grid-template-columns: 1fr; gap: 8px; }
+  .key-item { grid-template-columns: 26px minmax(0, 1fr) auto; padding: 12px; }
+  .key-right { gap: 5px; }
+  .key-count { font-size: 10px; }
+  .setup-banner { align-items: flex-start; padding: 14px; gap: 10px; }
+  .setup-banner-text { font-size: 12px; }
+  .go-settings-btn { padding: 10px 12px; font-size: 12px; }
+  button, select, input, textarea, .models-btn, .icon-btn, .save-btn, .load-models-btn, .health-check-btn { min-height: 42px; }
+  .form-input, .form-select, .model-search { min-height: 44px; padding: 10px 12px; }
+  .form-row { grid-template-columns: 1fr; gap: 12px; }
+  .token-field-row { align-items: stretch; }
+  .token-field-row .icon-btn { min-width: 76px; }
+  #page-settings { height: auto !important; min-height: calc(100vh - 58px); overflow: visible !important; padding: 18px var(--mobile-gutter) calc(18px + var(--mobile-nav-height)) !important; }
+  .settings-grid, .settings-col { display: flex !important; flex-direction: column !important; height: auto !important; min-height: 0 !important; gap: 14px; }
+  .settings-col:first-child { overflow: visible !important; padding-right: 0; }
+  .settings-col:last-child .card { height: auto; min-height: 0; }
+  .provider-table-wrap { overflow: visible !important; border: 0; }
+  .provider-table tr { margin-bottom: 10px !important; padding: 12px !important; }
+  .provider-table td { min-height: 44px; gap: 8px; }
+  .provider-table td::before { flex: 0 0 76px; }
+  .provider-table td.td-num { min-height: 28px; }
+  .provider-table td.td-num::before { flex: 0 0 auto; margin-right: 5px; }
+  .provider-table td .tbl-input, .provider-table td .tbl-num-input, .provider-table td select, .provider-table td .models-btn { min-height: 40px; }
+  .provider-actions, .save-bar { flex-wrap: wrap; }
+  .save-bar { position: sticky; bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); z-index: 20; margin: 0; padding: 12px !important; }
+  .save-btn { flex: 1; min-width: 140px; }
+  .log-wrap { min-height: 0; max-height: none; border: 0; overflow: visible; }
+  .log-wrap tr { margin-bottom: 10px !important; padding: 12px !important; }
+  .log-wrap td { min-height: 30px; gap: 10px; font-size: 10px; }
+  .log-wrap td::before { flex: 0 0 76px; }
+  .log-wrap td.p { max-width: none; overflow-wrap: anywhere; text-align: right; }
+  .health-provider-header { padding: 14px; align-items: flex-start; gap: 10px; }
+  .health-provider-meta { flex-wrap: wrap; justify-content: flex-end; }
+  .health-model-row { grid-template-columns: 14px minmax(0, 1fr) auto !important; gap: 8px; padding: 12px 14px; }
+  .health-model-row > :nth-child(2), .health-model-row > :nth-child(4), .health-model-row > :nth-child(5), .health-model-row > :nth-child(7), .health-model-row > :nth-child(9) { display: none !important; }
+  .health-model-name { font-size: 11px; }
+  .charts-row, .profile-grid-row1, .profile-grid-row2, .profile-grid-row3 { grid-template-columns: 1fr !important; }
+  .profile-grid-row3 > div:nth-child(2) { display: none !important; }
+  .model-toolbar { align-items: stretch; }
+  .model-search { min-width: 0; width: 100%; }
+  .model-toolbar .load-models-btn { width: 100%; }
+  .modal-overlay, .health-modal-overlay { align-items: flex-end; padding: 0; }
+  .modal-box, .am-modal-box, .health-modal-content { width: 100% !important; max-width: none !important; max-height: 88vh !important; border-radius: 18px 18px 0 0; border-bottom: 0; }
+  .modal-head, .modal-body, .modal-foot { padding-left: 16px; padding-right: 16px; }
+  .modal-foot { padding-bottom: calc(14px + env(safe-area-inset-bottom)); }
+  .am-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .login-overlay { padding: 16px; }
+  .login-box { width: 100% !important; max-width: 390px; padding: 28px 20px !important; border-radius: 18px; }
+  .login-input, .login-btn { min-height: 48px; }
+}
+@media screen and (max-width: 380px) {
+  .tab-btn { flex-basis: 72px; }
+  .stats-row { grid-template-columns: 1fr !important; }
+  .header-brand span { font-size: 13px; }
+  .live-badge { display: none; }
+}
+
