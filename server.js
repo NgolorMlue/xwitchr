@@ -52,6 +52,9 @@ let cfg  = configStore.load();
 const PORT = (cfg.port >= 1 && cfg.port <= 65535) ? cfg.port : parseInt(process.env.PORT || '51067', 10);
 
 let pool = buildPool(cfg);
+// Remember where each custom model last succeeded so fallback starts from a rotating cursor
+// instead of re-probing the same first backing models on every request.
+const customModelFallbackCursor = new Map();
 
 function buildPool(c) {
   if (!c.providers || c.providers.length === 0) return null;
@@ -927,6 +930,15 @@ app.post(['/v1/messages', '/proxy/messages'], (req, res, next) => {
 
 // ── ALL /proxy/* & /v1/* ───────────────────────────────────────────────────
 app.all(['/proxy/*', '/v1/*'], async (req, res) => {
+  // Generation endpoints in this router are POST-based.
+  // Reject GET/HEAD before touching provider state so probes never fan out.
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    return res.status(405).json({
+      error: 'Method Not Allowed',
+      message: 'Use POST for generation endpoints. GET is only supported for /v1/models and /proxy/models.',
+    });
+  }
+
   if (!pool) {
     return res.status(503).json({
       error: 'Not Configured',
@@ -1021,11 +1033,21 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       if (customModel) {
         let found = false;
         let lastErr = null;
-        for (const backingModel of customModel.models) {
+        const backings = Array.isArray(customModel.models) ? customModel.models : [];
+        const startPos = (() => {
+          const idx = customModelFallbackCursor.get(requestedModel);
+          return Number.isInteger(idx) && idx >= 0 && idx < backings.length ? idx : 0;
+        })();
+        const orderedBackings = backings.length > 0
+          ? backings.slice(startPos).concat(backings.slice(0, startPos))
+          : [];
+
+        for (const backingModel of orderedBackings) {
           if (excludeModelsSet.has(backingModel)) continue;
           try {
             provider = pool.getProvider(backingModel, excludeSet, 0, requiredType);
             resolvedModel = backingModel;
+            customModelFallbackCursor.set(requestedModel, (backings.indexOf(backingModel) + 1) % backings.length);
             found = true;
             break;
           } catch (e) {
