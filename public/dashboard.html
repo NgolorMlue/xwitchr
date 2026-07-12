@@ -127,14 +127,14 @@
     .go-settings-btn:hover{opacity:.85}
 
     /* ── Settings: Layout ── */
-    #page-settings {
+    #page-settings, #page-custom-models {
       height: calc(100vh - 60px);
       overflow: hidden;
       display: none;
       padding: 20px 28px 24px 28px;
       box-sizing: border-box;
     }
-    #page-settings.active {
+    #page-settings.active, #page-custom-models.active {
       display: flex;
       flex-direction: column;
       gap: 16px;
@@ -1663,7 +1663,7 @@
     
     <!-- LEFT: List of existing Custom Models -->
     <div class="settings-col">
-      <div class="card" style="flex:1; display:flex; flex-direction:column; min-height: 400px;">
+      <div class="card" style="flex:1; display:flex; flex-direction:column; min-height: 0;">
         <div class="section-header">
           <div class="section-title">🛠️ Custom Models</div>
         </div>
@@ -6431,7 +6431,7 @@ function renderCustomModels() {
           <button class="del-btn" style="padding:4px 8px; font-size:11.5px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="deleteCustomModel(${idx})">✕ Delete</button>
         </div>
       </div>
-      <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--border); padding-top:8px;">
+      <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--border); padding-top:8px; max-height:120px; overflow-y:auto; padding-right:4px;">
         ${fallbackList || '<div style="font-size:11.5px; color:var(--text-dim)">No fallback models defined.</div>'}
       </div>
     </div>`;
