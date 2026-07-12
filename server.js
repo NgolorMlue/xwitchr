@@ -100,6 +100,140 @@ function checkTokenEquals(provided, stored) {
   return crypto.timingSafeEqual(providedBuf, storedBuf);
 }
 
+// ── Shared utility: Responses API converters ────────────────────────────────
+function convertResponsesInputToMessages(input) {
+  if (typeof input === 'string') {
+    return [{ role: 'user', content: input }];
+  }
+  if (Array.isArray(input)) {
+    return input.map(item => {
+      if (typeof item === 'string') {
+        return { role: 'user', content: item };
+      }
+      if (item && typeof item === 'object') {
+        // Standard chat completions message object
+        if (item.role && item.content !== undefined) {
+          // If content is an array, check if it's Responses API format
+          if (Array.isArray(item.content)) {
+            const textParts = item.content
+              .filter(part => part && (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text'))
+              .map(part => part.text || '')
+              .join('');
+            return { role: item.role, content: textParts || JSON.stringify(item.content) };
+          }
+          return item;
+        }
+        // Responses API message item: { type: 'message', role: 'user', content: [...] }
+        if (item.type === 'message' && item.role && Array.isArray(item.content)) {
+          const textParts = item.content
+            .filter(part => part && (part.type === 'text' || part.type === 'input_text' || part.type === 'output_text'))
+            .map(part => part.text || '')
+            .join('');
+          return { role: item.role, content: textParts };
+        }
+      }
+      return { role: 'user', content: JSON.stringify(item) };
+    });
+  }
+  return [{ role: 'user', content: String(input || '') }];
+}
+
+function convertChatCompletionToResponsesFormat(chatCompletion, requestedModel) {
+  const id = chatCompletion.id ? chatCompletion.id.replace(/^chatcmpl-/, 'resp_') : `resp_${crypto.randomBytes(8).toString('hex')}`;
+  const text = chatCompletion.choices?.[0]?.message?.content || '';
+  const model = requestedModel || chatCompletion.model || 'openai/gpt-oss-20b';
+  
+  return {
+    id: id,
+    object: "response",
+    model: model,
+    status: "completed",
+    output_text: text,
+    output: [
+      {
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [
+          {
+            type: "output_text",
+            text: text,
+            annotations: []
+          }
+        ]
+      }
+    ],
+    usage: chatCompletion.usage
+  };
+}
+
+function handleOpenAiSseLine(line, state, writeFn, endFn) {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  
+  if (trimmed.startsWith('data: ')) {
+    const dataStr = trimmed.slice(6).trim();
+    if (dataStr === '[DONE]') {
+      sendCompleted(state, writeFn, endFn);
+      return true;
+    }
+    
+    try {
+      const parsed = JSON.parse(dataStr);
+      if (parsed.id) {
+        state.id = parsed.id.replace(/^chatcmpl-/, 'resp_');
+      }
+      if (parsed.model) {
+        state.model = parsed.model;
+      }
+      if (parsed.usage) {
+        state.usage = parsed.usage;
+      }
+      
+      const deltaContent = parsed.choices?.[0]?.delta?.content || '';
+      if (deltaContent) {
+        state.accumulatedText += deltaContent;
+        writeFn(`event: response.output_text.delta\ndata: ${JSON.stringify({ delta: deltaContent })}\n\n`);
+      }
+    } catch (e) {
+      // Ignore parse errors for non-JSON or partial chunks
+    }
+  }
+  return false;
+}
+
+function sendCompleted(state, writeFn, endFn) {
+  if (state.completedSent) return;
+  state.completedSent = true;
+  
+  const finalObj = {
+    id: state.id,
+    object: "response",
+    model: state.model,
+    status: "completed",
+    output_text: state.accumulatedText,
+    output: [
+      {
+        type: "message",
+        role: "assistant",
+        status: "completed",
+        content: [
+          {
+            type: "output_text",
+            text: state.accumulatedText,
+            annotations: []
+          }
+        ]
+      }
+    ]
+  };
+  if (state.usage) {
+    finalObj.usage = state.usage;
+  }
+  writeFn(`event: response.completed\ndata: ${JSON.stringify(finalObj)}\n\n`);
+  if (endFn) endFn();
+}
+
 // ── Express ────────────────────────────────────────────────────────────────
 const app = express();
 // Restrict CORS to dashboard/static routes only — proxy routes get no CORS headers
@@ -913,6 +1047,10 @@ app.get(['/v1/models', '/proxy/models'], (req, res) => {
       }
     }
   }
+  if (!seen.has('openai/gpt-oss-20b')) {
+    seen.add('openai/gpt-oss-20b');
+    models.push({ id: 'openai/gpt-oss-20b', object: 'model', created: 0, owned_by: 'router' });
+  }
   res.json({ object: 'list', data: models });
 });
 
@@ -983,8 +1121,29 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
     }
   }
 
+  const isResponsesApi = req.path === '/v1/responses' || req.path === '/proxy/responses';
+  let originalResponsesBody = null;
+  if (isResponsesApi && req.body && req.method === 'POST') {
+    originalResponsesBody = { ...req.body };
+    // Convert req.body to OpenAI chat completions format
+    const messages = convertResponsesInputToMessages(req.body.input);
+    req.body = {
+      model: requestedModel,
+      messages: messages,
+      stream: req.body.stream === true,
+    };
+    const PRESERVE_PARAMS = ['temperature', 'top_p', 'max_tokens', 'presence_penalty', 'frequency_penalty'];
+    for (const param of PRESERVE_PARAMS) {
+      if (originalResponsesBody[param] !== undefined) {
+        req.body[param] = originalResponsesBody[param];
+      }
+    }
+  }
 
-  const cleanPath = req.path.replace(/^\/(proxy|v1)/, '');
+  let cleanPath = req.path.replace(/^\/(proxy|v1)/, '');
+  if (isResponsesApi) {
+    cleanPath = '/chat/completions';
+  }
   if (['/props', '/slots', '/metrics'].includes(cleanPath)) {
     const responseTime = Date.now() - startTime;
     reqLogger.log({
@@ -1023,6 +1182,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
     let keyHint = '?';
     let resolvedModel = requestedModel;
     let isCustomModel = false;
+    const responsesState = isResponsesApi ? {
+      id: `resp_${crypto.randomBytes(8).toString('hex')}`,
+      model: requestedModel || 'openai/gpt-oss-20b',
+      accumulatedText: '',
+      usage: null,
+      completedSent: false
+    } : null;
     try {
       const wantsStream  = req.body && typeof req.body === 'object' && req.body.stream === true;
       const inputFormat  = req._inputFormat  || 'openai';
@@ -1068,7 +1234,14 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       const needsConversion = inputFormat !== providerType;
 
       // ── Build URL ──────────────────────────────────────────────────────────
-      const upstreamPath = req.path.replace(/^\/(proxy|v1)/, '');
+      let upstreamPath = req.path.replace(/^\/(proxy|v1)/, '');
+      if (isResponsesApi) {
+        if (providerType === 'anthropic') {
+          upstreamPath = '/messages';
+        } else {
+          upstreamPath = '/chat/completions';
+        }
+      }
       let urlObj;
       if (providerType === 'google') {
         const action = wantsStream ? 'streamGenerateContent' : 'generateContent';
@@ -1086,6 +1259,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       delete upstreamHeaders['authorization'];
       delete upstreamHeaders['x-proxy-token'];
       delete upstreamHeaders['content-length'];
+      delete upstreamHeaders['transfer-encoding'];
 
       if (providerType === 'anthropic') {
         upstreamHeaders['x-api-key']          = provider.key;
@@ -1158,6 +1332,7 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
             headers: upstreamHeaders,
             agent: urlObj.protocol === 'https:' ? ipv4HttpsAgent : ipv4HttpAgent,
           }, (proxyRes) => {
+            console.log(`[Proxy Stream] Received response from upstream: ${proxyRes.statusCode} for URL: ${urlObj.toString()}`);
             const responseTime = Date.now() - startTime;
 
             if (shouldFailoverStatus(proxyRes.statusCode, isCustomModel) && attempts < maxAttempts - 1) {
@@ -1210,7 +1385,16 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
                   } else if (t.startsWith('data:')) {
                     const data = t.slice(5).trim();
                     const converted = fmt.anthropicSseToOpenaiSse(curEvent, data, sseState);
-                    if (converted) res.write(converted);
+                    if (converted) {
+                      if (isResponsesApi) {
+                        const sublines = converted.split('\n');
+                        for (const subline of sublines) {
+                          handleOpenAiSseLine(subline, responsesState, (msg) => res.write(msg), () => res.end());
+                        }
+                      } else {
+                        res.write(converted);
+                      }
+                    }
                     // extract token usage
                     try {
                       const p = JSON.parse(data);
@@ -1231,6 +1415,9 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
               proxyRes.on('error', (err) => { req.off('close', onClientClose); settle(rejectStream, err); });
               proxyRes.on('end', () => {
                 req.off('close', onClientClose);
+                if (isResponsesApi) {
+                  sendCompleted(responsesState, (msg) => res.write(msg), () => res.end());
+                }
                 if (streamTokens?.total > 0) pool.recordTokens(provider, streamTokens.total, resolvedModel);
                 try { reqLogger.log({ method: req.method, path: req.path, keyHint, urlHint: provider.url.replace(/^https?:\/\//, '').split('/')[0], status: proxyRes.statusCode, responseTime, payload: reqPayloadStr, model: resolvedModel, ip: clientIp, userAgent: clientUserAgent, tokens: streamTokens }); } catch {}
                 settle(resolveStream, true);
@@ -1238,18 +1425,38 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
 
             } else {
               // Pass-through (OpenAI provider or Anthropic→Anthropic)
-              proxyRes.on('data', (chunk) => {
-                if (!bufferCapped) {
-                  streamBufLen += chunk.length;
-                  if (streamBufLen <= STREAM_BUF_LIMIT) chunks.push(chunk);
-                  else { bufferCapped = true; chunks.length = 0; }
-                }
-              });
-              proxyRes.pipe(res);
+              if (isResponsesApi) {
+                let openAiLineBuf = '';
+                proxyRes.on('data', (chunk) => {
+                  if (!bufferCapped) {
+                    streamBufLen += chunk.length;
+                    if (streamBufLen <= STREAM_BUF_LIMIT) chunks.push(chunk);
+                    else { bufferCapped = true; chunks.length = 0; }
+                  }
+                  openAiLineBuf += chunk.toString('utf8');
+                  const lines = openAiLineBuf.split('\n');
+                  openAiLineBuf = lines.pop();
+                  for (const line of lines) {
+                    handleOpenAiSseLine(line, responsesState, (msg) => res.write(msg), () => res.end());
+                  }
+                });
+              } else {
+                proxyRes.on('data', (chunk) => {
+                  if (!bufferCapped) {
+                    streamBufLen += chunk.length;
+                    if (streamBufLen <= STREAM_BUF_LIMIT) chunks.push(chunk);
+                    else { bufferCapped = true; chunks.length = 0; }
+                  }
+                });
+                proxyRes.pipe(res);
+              }
 
               proxyRes.on('error', (err) => { req.off('close', onClientClose); settle(rejectStream, err); });
               proxyRes.on('end', () => {
                 req.off('close', onClientClose);
+                if (isResponsesApi) {
+                  sendCompleted(responsesState, (msg) => res.write(msg), () => res.end());
+                }
                 if (!bufferCapped) {
                   const buf = Buffer.concat(chunks).toString('utf8');
                   // Scan SSE lines backwards for the last data chunk containing usage
@@ -1282,7 +1489,10 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
             streamTimeout = cfg.customModelTimeoutMs || 5000;
           }
           proxyReq.setTimeout(streamTimeout, () => proxyReq.destroy(new Error('Upstream request timed out')));
-          proxyReq.on('error', (err) => { settle(rejectStream, err); });
+          proxyReq.on('error', (err) => {
+            console.error('[Proxy Stream] proxyReq error:', err.message, err.stack);
+            settle(rejectStream, err);
+          });
           if (isMultipart && rawMultipartBody) {
             proxyReq.write(rawMultipartBody);
           } else if (!isMultipart && bodyStr) {
@@ -1351,6 +1561,17 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
             responseTokens = { prompt: resJson.usage.prompt_tokens || 0, completion: resJson.usage.completion_tokens || 0, total: resJson.usage.total_tokens || 0 };
           }
         } catch {}
+      }
+
+      if (isResponsesApi && upstream.status < 400) {
+        try {
+          const openaiRes = JSON.parse(sendData.toString('utf8'));
+          const responsesRes = convertChatCompletionToResponsesFormat(openaiRes, requestedModel);
+          sendData = Buffer.from(JSON.stringify(responsesRes));
+          res.setHeader('content-type', 'application/json');
+        } catch (err) {
+          console.error('[Responses API] Non-stream formatting error:', err.message);
+        }
       }
 
       res.status(upstream.status).send(sendData);
