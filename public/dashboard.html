@@ -1664,8 +1664,12 @@
     <!-- LEFT: List of existing Custom Models -->
     <div class="settings-col">
       <div class="card" style="flex:1; display:flex; flex-direction:column; min-height: 0;">
-        <div class="section-header">
-          <div class="section-title">🛠️ Custom Models</div>
+        <div class="section-header" style="margin-bottom:12px; display:flex; align-items:center; justify-content:space-between;">
+          <div class="section-title" style="margin-bottom:0">🛠️ Custom Models</div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <button class="icon-btn" onclick="openFailoverModal()" title="Failover Settings" style="padding: 0; width: 32px; height: 32px; font-size: 14px; display: flex; align-items: center; justify-content: center; border-radius: 8px;">⏱️</button>
+            <button class="save-btn" onclick="addNewCustomModel()" title="Create Custom Model" style="padding: 0; width: 32px; height: 32px; font-size: 15px; display: flex; align-items: center; justify-content: center; font-weight: bold; border-radius: 8px;">＋</button>
+          </div>
         </div>
         <div class="form-hint" style="margin-bottom:12px">
           Custom models route to a list of fallback models. If a backing model is disabled/down, the router falls back to the next model in the list.
@@ -1673,23 +1677,6 @@
         
         <div style="flex:1; overflow-y:auto;" id="customModelsList">
           <!-- Custom models rendered here -->
-        </div>
-      </div>
-
-      <!-- Failover Settings -->
-      <div class="card" style="margin-top: 16px;">
-        <div class="section-header">
-          <div class="section-title">⏱️ Failover Settings</div>
-        </div>
-        <div class="form-hint" style="margin-bottom:12px">
-          Configure latency limit for custom model fallback logic.
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="customModelTimeoutInput">Failover Timeout (seconds)</label>
-          <input class="form-input" id="customModelTimeoutInput" type="number" min="1" max="120" placeholder="5" />
-          <div class="form-hint">
-            If a backing model takes longer than this to respond, the router immediately switches to the next fallback model. (On the last fallback model, the standard 30s/120s timeout applies).
-          </div>
         </div>
       </div>
     </div>
@@ -1803,6 +1790,29 @@
       <button class="icon-btn" onclick="closeModelModal()">Cancel</button>
       <div style="flex:1"></div>
       <div class="model-stats" id="modalSaveHint">Empty selection = allow all models</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ FAILOVER SETTINGS MODAL ══ -->
+<div id="failoverModal" class="modal-overlay" style="display:none" onclick="closeFailoverModal()">
+  <div class="modal-box" style="max-width: 400px;" onclick="event.stopPropagation()">
+    <div class="modal-head">
+      <div class="modal-title">⏱️ Failover Settings</div>
+      <button class="modal-close" onclick="closeFailoverModal()">✕</button>
+    </div>
+    <div class="modal-body" style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+      <div class="form-group">
+        <label class="form-label" for="customModelTimeoutInput">Failover Timeout (seconds)</label>
+        <input class="form-input" id="customModelTimeoutInput" type="number" min="1" max="120" placeholder="5" style="font-family: var(--font-mono); font-size: 13px;" />
+        <div class="form-hint" style="margin-top:6px; line-height: 1.4;">
+          If a backing model takes longer than this to respond, the router immediately switches to the next fallback model.
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot" style="justify-content: flex-end; gap: 8px;">
+      <button class="save-btn" onclick="saveFailoverSettings()" style="padding: 8px 16px; font-size: 12.5px;">Apply</button>
+      <button class="icon-btn" onclick="closeFailoverModal()" style="padding: 8px 16px; font-size: 12.5px;">Cancel</button>
     </div>
   </div>
 </div>
@@ -6519,6 +6529,19 @@ function closeEditModel() {
   document.getElementById('customModelEditCol').style.display = 'none';
   _editingModelIndex = null;
   renderCustomModels();
+}
+
+function openFailoverModal() {
+  document.getElementById('failoverModal').style.display = 'flex';
+}
+
+function closeFailoverModal() {
+  document.getElementById('failoverModal').style.display = 'none';
+}
+
+async function saveFailoverSettings() {
+  closeFailoverModal();
+  await saveConfig({ keepTab: true });
 }
 
 function addFallbackRow(val = '') {
