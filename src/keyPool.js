@@ -35,6 +35,7 @@ class KeyPool {
       this.consecutiveFailures[id] = 0;
       this.lastFailureTime[id]     = 0;
     }
+    this.customModelStats = {};
   }
 
   // ── Internal ──────────────────────────────────────────────────
@@ -340,6 +341,37 @@ class KeyPool {
 
   getTotalRequests() {
     return this.providers.reduce((sum, p) => sum + this._count(p), 0);
+  }
+
+  recordCustomModelAttempt(customModel, backingModel, outcome) {
+    if (!customModel || !backingModel) return;
+    if (!this.customModelStats) {
+      this.customModelStats = {};
+    }
+    if (!this.customModelStats[customModel]) {
+      this.customModelStats[customModel] = {};
+    }
+    if (!this.customModelStats[customModel][backingModel]) {
+      this.customModelStats[customModel][backingModel] = {
+        requests: 0,
+        successes: 0,
+        failures: 0,
+        timeouts: 0
+      };
+    }
+    const stats = this.customModelStats[customModel][backingModel];
+    stats.requests++;
+    if (outcome === 'success') {
+      stats.successes++;
+    } else if (outcome === 'timeout') {
+      stats.timeouts++;
+    } else {
+      stats.failures++;
+    }
+  }
+
+  getCustomModelStats() {
+    return this.customModelStats || {};
   }
 }
 

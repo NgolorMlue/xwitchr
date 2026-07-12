@@ -911,6 +911,14 @@ app.post('/health/models/check', (req, res) => {
   res.json({ ok: true, message: 'Health check started. Results will be available in a few seconds.' });
 });
 
+// ── POST /health/custom-models/clear ─────────────────────────────────────────
+app.post('/health/custom-models/clear', (req, res) => {
+  if (pool) {
+    pool.customModelStats = {};
+  }
+  res.json({ ok: true, message: 'Custom model statistics cleared.' });
+});
+
 // ── GET /status ────────────────────────────────────────────────────────────
 app.get('/status', (req, res) => {
   if (!pool) {
@@ -938,6 +946,7 @@ app.get('/status', (req, res) => {
       rotationThreshold:       cfg.rotationThreshold,
       maxPerKey:               cfg.maxPerMinute,
       keys:                    pool.getStats(),
+      customModelStats:        pool.getCustomModelStats(),
     },
     tokenStats: reqLogger.getTokenStats(),
   });
@@ -1336,14 +1345,23 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
             const responseTime = Date.now() - startTime;
 
             if (shouldFailoverStatus(proxyRes.statusCode, isCustomModel) && attempts < maxAttempts - 1) {
+              if (isCustomModel) {
+                pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'failure');
+              }
               proxyRes.resume();
               return settle(rejectStream, new Error(`Upstream returned status ${proxyRes.statusCode}`));
             }
 
             if (shouldFailoverStatus(proxyRes.statusCode, isCustomModel)) {
               pool.recordFailure(provider);
+              if (isCustomModel) {
+                pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'failure');
+              }
             } else {
               pool.recordSuccess(provider);
+              if (isCustomModel) {
+                pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'success');
+              }
             }
 
             const skipHeaders = SKIP_PROXY_HEADERS;
@@ -1521,13 +1539,22 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       });
 
       if (shouldFailoverStatus(upstream.status, isCustomModel) && attempts < maxAttempts - 1) {
+        if (isCustomModel) {
+          pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'failure');
+        }
         throw new Error(`Upstream returned server error ${upstream.status}`);
       }
 
       if (shouldFailoverStatus(upstream.status, isCustomModel)) {
         pool.recordFailure(provider);
+        if (isCustomModel) {
+          pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'failure');
+        }
       } else {
         pool.recordSuccess(provider);
+        if (isCustomModel) {
+          pool.recordCustomModelAttempt(requestedModel, resolvedModel, 'success');
+        }
       }
 
       const responseTime = Date.now() - startTime;
@@ -1591,9 +1618,13 @@ app.all(['/proxy/*', '/v1/*'], async (req, res) => {
       console.warn(`[Proxy Attempt ${attempts} Failed] Provider: ${provider ? provider.url : 'none'}, Error: ${err.message}`);
 
       const isTimeout = err.code === 'ECONNABORTED' || err.message?.toLowerCase().includes('timeout') || err.message?.toLowerCase().includes('timed out');
-      if (isTimeout && isCustomModel && resolvedModel) {
-        excludeModelsSet.add(resolvedModel);
-        console.log(`[CustomModel] Backing model "${resolvedModel}" timed out. Added to exclusion set for this request.`);
+      if (isCustomModel && resolvedModel) {
+        const outcome = isTimeout ? 'timeout' : 'failure';
+        pool.recordCustomModelAttempt(requestedModel, resolvedModel, outcome);
+        if (isTimeout) {
+          excludeModelsSet.add(resolvedModel);
+          console.log(`[CustomModel] Backing model "${resolvedModel}" timed out. Added to exclusion set for this request.`);
+        }
       }
 
       if (provider) {

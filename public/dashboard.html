@@ -1190,6 +1190,32 @@
       </div>
     </div>
   </div>
+
+  <!-- Custom Models Fallback Statistics -->
+  <div class="card" id="customModelsStatsCard" style="margin-top: 20px;">
+    <div class="section-header" style="flex-wrap:wrap;gap:10px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-bottom:12px; cursor: pointer; user-select: none;" onclick="toggleCardCollapse('customModelsStatsCard')">
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="section-title" style="margin-bottom:0">🛡️ Custom Models Fallback Analytics</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-left:auto" onclick="event.stopPropagation()">
+        <button class="clear-btn" onclick="clearCustomModelStats()" style="padding:4px 10px;font-size:11px;">Clear Stats</button>
+      </div>
+      <span class="collapse-icon" id="customModelsStatsCard-collapse" style="font-size: 14px; font-weight: bold; margin-left: 8px;">▼</span>
+    </div>
+    <div id="customModelsStatsCard-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr 100px 100px 100px 100px;align-items:center;gap:12px;padding:6px 20px 8px;border-bottom:1px solid var(--border);margin-bottom:0">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Custom Model</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted)">Backing Model</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:right">Total Calls</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:right;color:var(--green)">Successes</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:right;color:var(--yellow)">Failures</div>
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);text-align:right;color:var(--red)">Timeouts</div>
+      </div>
+      <div id="customModelStatsBody" style="max-height:300px;overflow-y:auto;display:flex;flex-direction:column">
+        <div class="empty-row" style="padding:24px;text-align:center">No custom model statistics recorded yet. Send traffic to custom models.</div>
+      </div>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -2711,7 +2737,57 @@ async function fetchStatus() {
     document.getElementById('keyGrid').innerHTML=keys.map(renderKey).join('');
     _poolKeys = keys;
     renderModelsTab();
+    if (p.customModelStats) {
+      renderCustomModelStats(p.customModelStats);
+    }
   } catch(e){console.warn('status fetch failed',e);}
+}
+
+function renderCustomModelStats(stats) {
+  const tbody = document.getElementById('customModelStatsBody');
+  if (!tbody) return;
+  
+  const entries = [];
+  for (const [customModel, backingModels] of Object.entries(stats || {})) {
+    for (const [backingModel, s] of Object.entries(backingModels || {})) {
+      entries.push({
+        customModel,
+        backingModel,
+        requests: s.requests || 0,
+        successes: s.successes || 0,
+        failures: s.failures || 0,
+        timeouts: s.timeouts || 0
+      });
+    }
+  }
+  
+  if (entries.length === 0) {
+    tbody.innerHTML = '<div class="empty-row" style="padding:24px;text-align:center">No custom model statistics recorded yet. Send traffic to custom models.</div>';
+    return;
+  }
+  
+  tbody.innerHTML = entries.map(e => {
+    return `<div style="display:grid;grid-template-columns:1fr 1fr 100px 100px 100px 100px;align-items:center;gap:12px;padding:8px 20px;border-bottom:1px solid var(--border);font-family:var(--font-mono);font-size:11px;">
+      <div style="color:var(--accent);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(e.customModel)}">${escHtml(e.customModel)}</div>
+      <div style="color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(e.backingModel)}">${escHtml(e.backingModel)}</div>
+      <div style="text-align:right;color:var(--text);font-weight:500;">${e.requests}</div>
+      <div style="text-align:right;color:var(--green);font-weight:500;">${e.successes}</div>
+      <div style="text-align:right;color:var(--yellow);font-weight:500;">${e.failures}</div>
+      <div style="text-align:right;color:var(--red);font-weight:500;">${e.timeouts}</div>
+    </div>`;
+  }).join('');
+}
+
+async function clearCustomModelStats() {
+  if (!confirm('Are you sure you want to clear all custom model statistics?')) return;
+  try {
+    const r = await authFetch('/health/custom-models/clear', { method: 'POST' });
+    if (r.ok) {
+      fetchStatus();
+    }
+  } catch (e) {
+    console.warn('Failed to clear custom model stats', e);
+  }
 }
 
 function formatUptime(s){
