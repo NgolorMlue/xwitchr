@@ -1659,7 +1659,7 @@
 
 <!-- ══ CUSTOM MODELS ══ -->
 <div class="page fade-in" id="page-custom-models">
-  <div class="settings-grid">
+  <div class="settings-grid" id="customModelsGrid">
     
     <!-- LEFT: List of existing Custom Models -->
     <div class="settings-col">
@@ -1671,11 +1671,9 @@
           Custom models route to a list of fallback models. If a backing model is disabled/down, the router falls back to the next model in the list.
         </div>
         
-        <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;" id="customModelsList">
+        <div style="flex:1; overflow-y:auto;" id="customModelsList">
           <!-- Custom models rendered here -->
         </div>
-        
-        <button class="add-row-btn" style="border:1px dashed var(--border2); border-radius:8px; margin-top:12px; padding:12px; background:none; color:var(--text); cursor:pointer; font-weight:500; font-family:'Inter',sans-serif; transition:background .15s, border-color .15s;" onclick="addNewCustomModel()" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='none'">＋ Create Custom Model</button>
       </div>
 
       <!-- Failover Settings -->
@@ -6406,13 +6404,23 @@ function renderCustomModels() {
     const known = getAllKnownModels();
     datalist.innerHTML = known.map(m => `<option value="${escHtml(m)}"></option>`).join('');
   }
+
+  const isEditing = document.getElementById('customModelEditCol').style.display === 'flex';
+  const grid = document.getElementById('customModelsGrid');
   
-  if (!_customModels || _customModels.length === 0) {
-    container.innerHTML = '<div class="empty-row" style="text-align:center; padding:24px; color:var(--text-dim);">No custom models created yet. Click "Create Custom Model" to start.</div>';
-    return;
+  if (isEditing) {
+    if (grid) grid.style.gridTemplateColumns = '380px 1fr';
+    container.style.display = 'flex';
+    container.style.flexDirection = 'column';
+    container.style.gap = '12px';
+  } else {
+    if (grid) grid.style.gridTemplateColumns = '1fr';
+    container.style.display = 'grid';
+    container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+    container.style.gap = '16px';
   }
   
-  container.innerHTML = _customModels.map((cm, idx) => {
+  let cardsHtml = (_customModels || []).map((cm, idx) => {
     const fallbackList = cm.models.map((m, i) => {
       const isHealthy = !_disabledModels.includes(m);
       const dotColor = isHealthy ? 'var(--green)' : 'var(--red)';
@@ -6425,10 +6433,10 @@ function renderCustomModels() {
     
     return `<div class="card" style="background:var(--surface2); border:1px solid var(--border); padding:16px; display:flex; flex-direction:column; gap:10px;">
       <div style="display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-family:var(--font-mono); font-weight:700; font-size:14px; color:var(--accent);">${escHtml(cm.name)}</span>
-        <div style="display:flex; gap:6px;">
+        <span style="font-family:var(--font-mono); font-weight:700; font-size:14px; color:var(--accent); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:160px;" title="${escHtml(cm.name)}">${escHtml(cm.name)}</span>
+        <div style="display:flex; gap:6px; flex-shrink:0;">
           <button class="icon-btn" style="padding:4px 8px; font-size:11.5px;" onclick="editCustomModel(${idx})">📝 Edit</button>
-          <button class="del-btn" style="padding:4px 8px; font-size:11.5px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="deleteCustomModel(${idx})">✕ Delete</button>
+          <button class="del-btn" style="padding:4px 8px; font-size:11.5px; background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); color:var(--red);" onclick="deleteCustomModel(${idx})">✕</button>
         </div>
       </div>
       <div style="display:flex; flex-direction:column; gap:6px; border-top:1px solid var(--border); padding-top:8px; max-height:120px; overflow-y:auto; padding-right:4px;">
@@ -6436,6 +6444,25 @@ function renderCustomModels() {
       </div>
     </div>`;
   }).join('');
+
+  if (!isEditing) {
+    cardsHtml += `<div class="card" style="border: 2px dashed var(--border2); border-radius:var(--radius); background: none; display: flex; flex-direction:column; align-items: center; justify-content: center; min-height: 120px; cursor: pointer; color: var(--text-muted); font-weight: 600; gap:8px; transition: border-color .15s, color .15s, background-color .15s;" 
+      onclick="addNewCustomModel()" 
+      onmouseover="this.style.borderColor='var(--accent)'; this.style.color='var(--accent)'; this.style.backgroundColor='rgba(59,130,246,0.02)';" 
+      onmouseout="this.style.borderColor='var(--border2)'; this.style.color='var(--text-muted)'; this.style.backgroundColor='none';">
+      <span style="font-size:24px">＋</span>
+      <span>Create Custom Model</span>
+    </div>`;
+  }
+  
+  if (!_customModels || _customModels.length === 0) {
+    if (isEditing) {
+      container.innerHTML = '<div class="empty-row" style="text-align:center; padding:24px; color:var(--text-dim);">No custom models created yet. Complete creation on the right.</div>';
+      return;
+    }
+  }
+
+  container.innerHTML = cardsHtml;
 }
 
 function addNewCustomModel() {
@@ -6452,6 +6479,7 @@ function addNewCustomModel() {
   
   document.getElementById('customModelEditCol').style.display = 'flex';
   document.getElementById('customModelNameInput').focus();
+  renderCustomModels();
 }
 
 function editCustomModel(idx) {
@@ -6477,6 +6505,7 @@ function editCustomModel(idx) {
   }
   
   document.getElementById('customModelEditCol').style.display = 'flex';
+  renderCustomModels();
 }
 
 function deleteCustomModel(idx) {
@@ -6489,6 +6518,7 @@ function deleteCustomModel(idx) {
 function closeEditModel() {
   document.getElementById('customModelEditCol').style.display = 'none';
   _editingModelIndex = null;
+  renderCustomModels();
 }
 
 function addFallbackRow(val = '') {
